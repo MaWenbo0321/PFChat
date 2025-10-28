@@ -15,6 +15,7 @@ var jwtSecret = []byte("your-secret-key-change-in-production")
 type Claims struct {
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
+	Role     string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -45,6 +46,7 @@ func register(c *gin.Context) {
 		Username: req.Username,
 		Password: string(hashedPassword),
 		Country:  req.Country,
+		Role:     RoleUser, // 默认为普通用户
 	}
 
 	if err := db.Create(&user).Error; err != nil {
@@ -53,7 +55,7 @@ func register(c *gin.Context) {
 	}
 
 	// 生成 token
-	token, err := generateToken(user.ID, user.Username)
+	token, err := generateToken(user.ID, user.Username, user.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成token失败"})
 		return
@@ -87,7 +89,7 @@ func login(c *gin.Context) {
 	}
 
 	// 生成 token
-	token, err := generateToken(user.ID, user.Username)
+	token, err := generateToken(user.ID, user.Username, user.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成token失败"})
 		return
@@ -100,10 +102,11 @@ func login(c *gin.Context) {
 }
 
 // 生成 JWT token
-func generateToken(userID uint, username string) (string, error) {
+func generateToken(userID uint, username, role string) (string, error) {
 	claims := Claims{
 		UserID:   userID,
 		Username: username,
+		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -153,6 +156,27 @@ func authMiddleware() gin.HandlerFunc {
 		// 将用户信息存入上下文
 		c.Set("userID", claims.UserID)
 		c.Set("username", claims.Username)
+		c.Set("role", claims.Role)
+		c.Next()
+	}
+}
+
+// 管理员权限中间件
+func adminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("role")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未获取到用户角色信息"})
+			c.Abort()
+			return
+		}
+
+		if role.(string) != RoleAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "需要管理员权限"})
+			c.Abort()
+			return
+		}
+
 		c.Next()
 	}
 }
@@ -161,4 +185,15 @@ func authMiddleware() gin.HandlerFunc {
 func getCurrentUserID(c *gin.Context) uint {
 	userID, _ := c.Get("userID")
 	return userID.(uint)
+}
+
+// 获取当前用户角色
+func getCurrentUserRole(c *gin.Context) string {
+	role, _ := c.Get("role")
+	return role.(string)
+}
+
+// 检查当前用户是否为管理员
+func isCurrentUserAdmin(c *gin.Context) bool {
+	return getCurrentUserRole(c) == RoleAdmin
 }

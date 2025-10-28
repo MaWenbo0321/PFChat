@@ -6,12 +6,19 @@ import (
 	"gorm.io/gorm"
 )
 
+// 用户角色常量
+const (
+	RoleUser  = "user"
+	RoleAdmin = "admin"
+)
+
 // User 用户模型
 type User struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
 	Username  string         `gorm:"unique;not null" json:"username"`
 	Password  string         `gorm:"not null" json:"-"`
 	Country   string         `gorm:"not null" json:"country"`
+	Role      string         `gorm:"default:user" json:"role"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
@@ -64,7 +71,7 @@ type GrammarCheckResult struct {
 
 // 请求/响应结构
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=20"`
+	Username string `json:"username" binding:"required,min=2,max=20"`
 	Password string `json:"password" binding:"required,min=6"`
 	Country  string `json:"country" binding:"required"`
 }
@@ -82,4 +89,26 @@ type LoginResponse struct {
 type SendMessageRequest struct {
 	ReceiverID uint   `json:"receiver_id" binding:"required"`
 	Content    string `json:"content" binding:"required"`
+}
+
+// 管理员相关请求结构
+type UserManageRequest struct {
+	UserID uint   `json:"user_id" binding:"required"`
+	Action string `json:"action" binding:"required"` // "delete", "promote", "demote"
+}
+
+// 用户列表响应
+type UserListResponse struct {
+	Users []User `json:"users"`
+	Total int64  `json:"total"`
+}
+
+// 检查用户是否为管理员
+func (u *User) IsAdmin() bool {
+	return u.Role == RoleAdmin
+}
+
+// 检查用户是否为普通用户
+func (u *User) IsUser() bool {
+	return u.Role == RoleUser
 }

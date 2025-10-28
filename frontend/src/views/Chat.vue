@@ -6,11 +6,31 @@
         <div class="current-user">
           <el-avatar :size="40">{{ userStore.userInfo?.username?.[0] }}</el-avatar>
           <div class="user-info">
-            <div class="username">{{ userStore.userInfo?.username }}</div>
+            <div class="username">
+              {{ userStore.userInfo?.username }}
+              <el-tag
+                  v-if="userStore.userInfo?.role === 'admin'"
+                  type="danger"
+                  size="small"
+                  style="margin-left: 8px"
+              >
+                管理员
+              </el-tag>
+            </div>
             <div class="country">{{ userStore.userInfo?.country }}</div>
           </div>
         </div>
         <div class="header-actions">
+          <!-- 管理员控制台按钮 -->
+          <el-button
+              v-if="userStore.userInfo?.role === 'admin'"
+              :icon="Setting"
+              circle
+              size="small"
+              type="danger"
+              @click="$router.push('/admin')"
+              title="管理员控制台"
+          />
           <el-button
               :icon="Document"
               circle
@@ -50,7 +70,17 @@
         >
           <el-avatar :size="45">{{ user.username[0] }}</el-avatar>
           <div class="user-detail">
-            <div class="username">{{ user.username }}</div>
+            <div class="username">
+              {{ user.username }}
+              <el-tag
+                  v-if="user.role === 'admin'"
+                  type="danger"
+                  size="small"
+                  style="margin-left: 5px"
+              >
+                管理员
+              </el-tag>
+            </div>
             <div class="country-tag">{{ user.country }}</div>
           </div>
         </div>
@@ -67,7 +97,17 @@
           <div class="chat-user-left">
             <el-avatar :size="40">{{ chatStore.currentChatUser.username[0] }}</el-avatar>
             <div class="chat-user-info">
-              <div class="username">{{ chatStore.currentChatUser.username }}</div>
+              <div class="username">
+                {{ chatStore.currentChatUser.username }}
+                <el-tag
+                    v-if="chatStore.currentChatUser.role === 'admin'"
+                    type="danger"
+                    size="small"
+                    style="margin-left: 8px"
+                >
+                  管理员
+                </el-tag>
+              </div>
               <div class="country">{{ chatStore.currentChatUser.country }}</div>
             </div>
           </div>
@@ -95,17 +135,28 @@
             <el-avatar :size="35">{{ msg.sender.username[0] }}</el-avatar>
             <div class="message-content">
               <div class="message-header">
-                <span class="sender-name">{{ msg.sender.username }}</span>
+                <span class="sender-name">
+                  {{ msg.sender.username }}
+                  <el-tag
+                      v-if="msg.sender.role === 'admin'"
+                      type="danger"
+                      size="small"
+                      style="margin-left: 5px"
+                  >
+                    管理员
+                  </el-tag>
+                </span>
                 <span class="message-time">{{ formatTime(msg.sent_at) }}</span>
+                <!-- 管理员可以删除任何消息，普通用户只能删除自己的消息 -->
                 <el-button
-                    v-if="msg.sender_id === userStore.userInfo.id"
+                    v-if="msg.sender_id === userStore.userInfo.id || userStore.userInfo?.role === 'admin'"
                     :icon="Delete"
                     size="small"
-                    type="danger"
+                    :type="msg.sender_id !== userStore.userInfo.id ? 'warning' : 'danger'"
                     text
                     @click="deleteMessage(msg.id)"
                     class="delete-btn"
-                    title="删除消息"
+                    :title="msg.sender_id !== userStore.userInfo.id ? '管理员删除' : '删除消息'"
                 />
               </div>
               <div class="message-text">{{ msg.content }}</div>
@@ -150,7 +201,15 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { SwitchButton, Document, Promotion, Connection, Delete, MoreFilled } from '@element-plus/icons-vue'
+import {
+  SwitchButton,
+  Document,
+  Promotion,
+  Connection,
+  Delete,
+  MoreFilled,
+  Setting
+} from '@element-plus/icons-vue'
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
 import { useChatStore } from '@/stores/chat'
@@ -281,7 +340,16 @@ const handleLogout = () => {
 // 删除单条消息
 const deleteMessage = async (messageId) => {
   try {
-    await ElMessageBox.confirm('确定要删除这条消息吗？', '提示', {
+    const message = chatStore.currentMessages.find(m => m.id === messageId)
+    const isOwnMessage = message?.sender_id === userStore.userInfo.id
+    const isAdmin = userStore.userInfo?.role === 'admin'
+
+    let confirmText = '确定要删除这条消息吗？'
+    if (!isOwnMessage && isAdmin) {
+      confirmText = '您正在以管理员身份删除其他用户的消息，确定要删除吗？'
+    }
+
+    await ElMessageBox.confirm(confirmText, '提示', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning'
@@ -396,6 +464,8 @@ watch(() => chatStore.currentMessages.length, () => {
   font-weight: 600;
   font-size: 16px;
   color: #303133;
+  display: flex;
+  align-items: center;
 }
 
 .country {
@@ -452,6 +522,12 @@ watch(() => chatStore.currentMessages.length, () => {
   flex: 1;
 }
 
+.user-detail .username {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+
 .country-tag {
   font-size: 12px;
   color: #909399;
@@ -489,6 +565,11 @@ watch(() => chatStore.currentMessages.length, () => {
 .chat-user-info {
   display: flex;
   flex-direction: column;
+}
+
+.chat-user-info .username {
+  display: flex;
+  align-items: center;
 }
 
 .messages-container {
@@ -529,6 +610,8 @@ watch(() => chatStore.currentMessages.length, () => {
 
 .sender-name {
   font-weight: 600;
+  display: flex;
+  align-items: center;
 }
 
 .delete-btn {

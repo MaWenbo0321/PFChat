@@ -34,6 +34,8 @@ api.interceptors.response.use(
                 const userStore = useUserStore()
                 userStore.logout()
                 window.location.href = '/login'
+            } else if (status === 403) {
+                ElMessage.error('权限不足，拒绝访问')
             } else {
                 ElMessage.error(data.error || '请求失败')
             }
@@ -85,5 +87,39 @@ export default {
     },
     deleteGrammarError(id) {
         return api.delete(`/grammar-errors/${id}`)
+    },
+
+    // 管理员相关 API
+
+    // 获取所有用户（管理员）
+    getAllUsersForAdmin(params = {}) {
+        return api.get('/admin/users', { params })
+    },
+
+    // 删除用户（管理员）
+    deleteUser(userId) {
+        return api.delete(`/admin/users/${userId}`)
+    },
+
+    // 更新用户角色（管理员）
+    updateUserRole(userId, data) {
+        return api.put(`/admin/users/${userId}/role`, data)
+    },
+
+    // 获取系统统计信息（管理员）
+    getUserStats() {
+        return api.get('/admin/stats')
+    },
+
+    // 辅助方法：检查用户是否为管理员
+    isAdmin() {
+        const userStore = useUserStore()
+        return userStore.userInfo?.role === 'admin'
+    },
+
+    // 辅助方法：获取当前用户角色
+    getCurrentUserRole() {
+        const userStore = useUserStore()
+        return userStore.userInfo?.role || 'user'
     }
 }

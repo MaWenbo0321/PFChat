@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -17,6 +18,9 @@ func main() {
 	// 初始化 WebSocket Hub
 	hub := newHub()
 	go hub.run()
+
+	// 设置全局 hub
+	globalHub = hub
 
 	// 初始化路由
 	r := gin.Default()
@@ -49,6 +53,21 @@ func main() {
 			// 语法错误记录
 			auth.GET("/grammar-errors", getGrammarErrors)
 			auth.DELETE("/grammar-errors/:id", deleteGrammarError)
+
+			// 管理员专用路由
+			admin := auth.Group("/admin")
+			admin.Use(adminMiddleware())
+			{
+				// 用户管理
+				admin.GET("/users", getAllUsersForAdmin)
+				admin.DELETE("/users/:id", deleteUser)
+				admin.PUT("/users/:id/role", updateUserRole)
+
+				// 系统统计
+				admin.GET("/stats", getUserStats)
+
+				// 管理员可以删除任何消息（通过标准消息接口，权限在处理函数中验证）
+			}
 		}
 	}
 
@@ -71,7 +90,40 @@ func initDB() {
 
 	// 自动迁移
 	db.AutoMigrate(&User{}, &Message{}, &GrammarError{})
+
+	// 创建默认管理员账号（如果不存在）
+	createDefaultAdmin()
+
 	log.Println("Database connected and migrated")
+}
+
+// 创建默认管理员账号
+func createDefaultAdmin() {
+	var adminUser User
+
+	// 检查是否已存在管理员账号
+	if err := db.Where("role = ?", RoleAdmin).First(&adminUser).Error; err != nil {
+		// 不存在管理员，创建默认管理员
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123456"), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("Failed to hash admin password: %v", err)
+			return
+		}
+
+		defaultAdmin := User{
+			Username: "admin",
+			Password: string(hashedPassword),
+			Country:  "CN",
+			Role:     RoleAdmin,
+		}
+
+		if err := db.Create(&defaultAdmin).Error; err != nil {
+			log.Printf("Failed to create default admin: %v", err)
+		} else {
+			log.Println("Default admin account created - Username: admin, Password: admin123456")
+			log.Println("⚠️  Please change the default admin password after first login!")
+		}
+	}
 }
 
 func corsMiddleware() gin.HandlerFunc {
