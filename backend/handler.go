@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -97,6 +99,46 @@ func sendMessage(c *gin.Context) {
 	go checkGrammar(currentUserID, message)
 
 	c.JSON(http.StatusOK, message)
+}
+
+// WebSocket 消息处理
+func handleChatMessage(client *Client, data interface{}) {
+	dataMap, ok := data.(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	receiverID := uint(dataMap["receiver_id"].(float64))
+	content := dataMap["content"].(string)
+
+	// 保存消息
+	message := Message{
+		SenderID:   client.userID,
+		ReceiverID: receiverID,
+		Content:    content,
+		CreatedAt:  time.Now(),
+	}
+
+	if err := db.Create(&message).Error; err != nil {
+		log.Println("Save message error:", err)
+		return
+	}
+
+	// 预加载关联数据
+	db.Preload("Sender").Preload("Receiver").First(&message, message.ID)
+
+	// 发送给接收者
+	wsMsg := WSMessage{
+		Type:      "message",
+		Data:      message,
+		Timestamp: time.Now(),
+	}
+
+	msgBytes, _ := json.Marshal(wsMsg)
+	client.hub.sendToUser(receiverID, msgBytes)
+
+	// 异步语法检查
+	go checkGrammar(client.userID, message)
 }
 
 // 删除单条消息
