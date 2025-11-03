@@ -12,53 +12,58 @@ const (
 	RoleAdmin = "admin"
 )
 
-// User 用户模型
 type User struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	Username  string         `gorm:"unique;not null" json:"username"`
-	Password  string         `gorm:"not null" json:"-"`
-	Country   string         `gorm:"not null" json:"country"`
-	Role      string         `gorm:"default:user" json:"role"`
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	Username  string         `json:"username" gorm:"uniqueIndex;not null"`
+	Password  string         `json:"-" gorm:"not null"` // 密码不返回给前端
+	Country   string         `json:"country" gorm:"not null"`
+	Role      string         `json:"role" gorm:"default:user"` // user 或 admin
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 // Message 消息模型
 type Message struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	SenderID   uint      `gorm:"not null;index" json:"sender_id"`
-	ReceiverID uint      `gorm:"not null;index" json:"receiver_id"`
-	Content    string    `gorm:"type:text;not null" json:"content"`
-	IsRead     bool      `gorm:"default:false" json:"is_read"`
-	SentAt     time.Time `json:"sent_at"`
+	ID         uint      `json:"id" gorm:"primaryKey"`
+	SenderID   uint      `json:"sender_id" gorm:"not null;index"`
+	ReceiverID uint      `json:"receiver_id" gorm:"not null;index"`
+	Content    string    `json:"content" gorm:"type:text;not null"`
 	CreatedAt  time.Time `json:"created_at"`
 
 	// 关联
-	Sender   User `gorm:"foreignKey:SenderID" json:"sender,omitempty"`
-	Receiver User `gorm:"foreignKey:ReceiverID" json:"receiver,omitempty"`
+	Sender   User `json:"sender" gorm:"foreignKey:SenderID"`
+	Receiver User `json:"receiver" gorm:"foreignKey:ReceiverID"`
 }
 
 // GrammarError 语法错误记录模型
 type GrammarError struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	UserID         uint      `gorm:"not null;index" json:"user_id"`
-	MessageID      uint      `gorm:"not null" json:"message_id"`
-	OriginalText   string    `gorm:"type:text;not null" json:"original_text"`
-	LLMSuggestion  string    `gorm:"type:text;not null" json:"llm_suggestion"`
-	LLMExplanation string    `gorm:"type:text" json:"llm_explanation"`
+	ID             uint      `json:"id" gorm:"primaryKey"`
+	UserID         uint      `json:"user_id" gorm:"not null;index"`
+	MessageID      uint      `json:"message_id" gorm:"index"` // 关联的消息ID
+	OriginalText   string    `json:"original_text" gorm:"type:text;not null"`
+	LLMSuggestion  string    `json:"llm_suggestion" gorm:"type:text"`
+	LLMExplanation string    `json:"llm_explanation" gorm:"type:text"`
+	ErrorType      string    `json:"error_type" gorm:"type:varchar(50);not null;default:'错误1';index"` // 新增: 错误类型
+	MessageDeleted bool      `json:"message_deleted" gorm:"default:false"`                            // 标记原消息是否被删除
 	CreatedAt      time.Time `json:"created_at"`
 
 	// 关联
-	User    User    `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Message Message `gorm:"foreignKey:MessageID" json:"message,omitempty"`
+	User User `json:"user" gorm:"foreignKey:UserID"`
 }
 
-// WebSocket 消息结构
-type WSMessage struct {
-	Type      string      `json:"type"` // "message", "grammar_check", "online", "offline"
-	Data      interface{} `json:"data"`
-	Timestamp time.Time   `json:"timestamp"`
+// TableName 指定表名
+func (GrammarError) TableName() string {
+	return "grammar_errors"
+}
+
+// BeforeCreate 创建前的钩子
+func (ge *GrammarError) BeforeCreate(tx *gorm.DB) error {
+	// 如果没有设置错误类型,默认为"错误1"
+	if ge.ErrorType == "" {
+		ge.ErrorType = "错误3"
+	}
+	return nil
 }
 
 // 语法检查结果
@@ -111,4 +116,10 @@ func (u *User) IsAdmin() bool {
 // 检查用户是否为普通用户
 func (u *User) IsUser() bool {
 	return u.Role == RoleUser
+}
+
+type WSMessage struct {
+	Type      string      `json:"type"` // "message", "grammar_check", "online", "offline"
+	Data      interface{} `json:"data"`
+	Timestamp time.Time   `json:"timestamp"`
 }

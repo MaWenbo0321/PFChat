@@ -2,208 +2,310 @@
   <div class="grammar-errors-container">
     <div class="header">
       <div class="header-left">
-        <el-button :icon="ArrowLeft" @click="$router.back()">返回</el-button>
-        <h1>语法错误记录</h1>
+        <el-button :icon="ArrowLeft" @click="$router.back()">{{ $t('grammar.back') }}</el-button>
+        <h1>{{ $t('grammar.title') }}</h1>
       </div>
-      <el-button
-          type="danger"
-          :icon="Delete"
-          @click="clearAll"
-          :disabled="errors.length === 0"
-      >
-        清空全部
-      </el-button>
+      <div class="header-actions">
+        <el-button
+            v-if="currentTypeFilter !== 'all'"
+            type="warning"
+            :icon="Delete"
+            @click="clearCurrentType"
+            :disabled="filteredErrors.length === 0"
+        >
+          {{ $t('grammar.clearType') }}
+        </el-button>
+        <el-button
+            type="danger"
+            :icon="Delete"
+            @click="clearAll"
+            :disabled="errors.length === 0"
+        >
+          {{ $t('grammar.clearAll') }}
+        </el-button>
+      </div>
     </div>
 
     <div class="content">
+      <!-- 统计卡片 -->
       <div class="stats">
-        <el-statistic title="总错误数" :value="errors.length" />
-        <el-statistic title="本周错误" :value="weekErrors" />
-        <el-statistic title="今日错误" :value="todayErrors" />
+        <el-statistic :title="$t('grammar.totalErrors')" :value="statistics.total" />
+        <el-statistic :title="$t('grammar.type1Count')" :value="statistics.by_type['错误1'] || 0" />
+        <el-statistic :title="$t('grammar.type2Count')" :value="statistics.by_type['错误2'] || 0" />
+        <el-statistic :title="$t('grammar.weekErrors')" :value="statistics.week_count" />
+        <el-statistic :title="$t('grammar.todayErrors')" :value="statistics.today_count" />
       </div>
 
+      <!-- 筛选器 -->
       <div class="filters">
         <el-input
             v-model="searchKeyword"
-            placeholder="搜索错误内容"
+            :placeholder="$t('grammar.search')"
             prefix-icon="Search"
             clearable
             style="width: 300px"
         />
-        <el-select v-model="timeFilter" placeholder="时间筛选" style="width: 150px">
-          <el-option label="全部" value="all" />
-          <el-option label="今天" value="today" />
-          <el-option label="本周" value="week" />
-          <el-option label="本月" value="month" />
+        <el-select
+            v-model="currentTypeFilter"
+            :placeholder="$t('grammar.typeFilter')"
+            style="width: 180px"
+            @change="handleTypeChange"
+        >
+          <el-option :label="$t('grammar.allTypes')" value="all" />
+          <el-option :label="$t('grammar.errorType1')" value="错误1" />
+          <el-option :label="$t('grammar.errorType2')" value="错误2" />
         </el-select>
       </div>
 
-      <div class="error-list">
-        <el-empty v-if="filteredErrors.length === 0" description="暂无错误记录" />
+      <!-- 按类型分组展示 -->
+      <div class="error-groups">
+        <template v-for="(groupErrors, errorType) in groupedErrors" :key="errorType">
+          <div class="error-group" v-if="groupErrors.length > 0">
+            <div class="group-header">
+              <h2>
+                <el-tag :type="errorType === '错误1' ? 'danger' : 'warning'" size="large">
+                  {{ errorType === '错误1' ? $t('grammar.errorType1') : $t('grammar.errorType2') }}
+                </el-tag>
+                <span class="group-count">({{ groupErrors.length }})</span>
+              </h2>
+            </div>
 
-        <el-card
-            v-for="error in filteredErrors"
-            :key="error.id"
-            class="error-card"
-            shadow="hover"
-        >
-          <div class="error-header">
-            <span class="error-time">
-              <el-icon><Clock /></el-icon>
-              {{ formatDate(error.created_at) }}
-            </span>
-            <el-button
-                type="danger"
-                size="small"
-                :icon="Delete"
-                @click="deleteError(error.id)"
-                text
-            >
-              删除
-            </el-button>
+            <div class="error-list">
+              <el-card
+                  v-for="error in groupErrors"
+                  :key="error.id"
+                  class="error-card"
+                  shadow="hover"
+              >
+                <div class="error-header">
+                  <span class="error-time">
+                    <el-icon><Clock /></el-icon>
+                    {{ formatDate(error.created_at) }}
+                  </span>
+                  <div class="error-actions">
+                    <el-dropdown @command="(cmd) => handleCommand(cmd, error)">
+                      <el-button size="small" :icon="MoreFilled" text />
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item command="changeType">
+                            <el-icon><Edit /></el-icon>
+                            {{ $t('grammar.changeType') }}
+                          </el-dropdown-item>
+                          <el-dropdown-item command="delete" divided>
+                            <el-icon color="#f56c6c"><Delete /></el-icon>
+                            {{ $t('grammar.delete') }}
+                          </el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                  </div>
+                </div>
+
+                <div class="error-content">
+                  <div class="section">
+                    <div class="section-title">
+                      <el-icon color="#f56c6c"><WarningFilled /></el-icon>
+                      {{ $t('grammar.originalText') }}
+                    </div>
+                    <div class="original-text">{{ error.original_text }}</div>
+                  </div>
+
+                  <div class="section">
+                    <div class="section-title">
+                      <el-icon color="#67c23a"><Check /></el-icon>
+                      {{ $t('grammar.suggestion') }}
+                    </div>
+                    <div class="suggestion-text">
+                      <span>{{ error.llm_suggestion }}</span>
+                      <el-button
+                          :icon="CopyDocument"
+                          size="small"
+                          @click="copyText(error.llm_suggestion)"
+                          text
+                      >
+                        {{ $t('grammar.copy') }}
+                      </el-button>
+                    </div>
+                  </div>
+
+                  <div class="section">
+                    <div class="section-title">
+                      <el-icon color="#409eff"><InfoFilled /></el-icon>
+                      {{ $t('grammar.explanation') }}
+                    </div>
+                    <div class="explanation-text">{{ error.llm_explanation }}</div>
+                  </div>
+
+                  <div v-if="error.message_deleted" class="deleted-notice">
+                    <el-icon color="#909399"><Warning /></el-icon>
+                    <span>{{ $t('grammar.messageDeleted') }}</span>
+                  </div>
+                </div>
+              </el-card>
+            </div>
           </div>
+        </template>
 
-          <div class="error-content">
-            <div class="section">
-              <div class="section-title">
-                <el-icon color="#f56c6c"><WarningFilled /></el-icon>
-                原始文本
-              </div>
-              <div class="original-text">{{ error.original_text }}</div>
-            </div>
-
-            <el-divider />
-
-            <div class="section">
-              <div class="section-title">
-                <el-icon color="#67c23a"><CircleCheckFilled /></el-icon>
-                建议修改
-              </div>
-              <div class="suggestion-text">
-                {{ error.llm_suggestion }}
-                <el-button
-                    :icon="CopyDocument"
-                    size="small"
-                    @click="copyText(error.llm_suggestion)"
-                    text
-                >
-                  复制
-                </el-button>
-              </div>
-            </div>
-
-            <el-divider />
-
-            <div class="section">
-              <div class="section-title">
-                <el-icon color="#409eff"><InfoFilled /></el-icon>
-                错误说明
-              </div>
-              <div class="explanation-text">{{ error.llm_explanation }}</div>
-            </div>
-          </div>
-        </el-card>
-      </div>
-
-      <!-- 分页 -->
-      <div class="pagination" v-if="filteredErrors.length > pageSize">
-        <el-pagination
-            v-model:current-page="currentPage"
-            :page-size="pageSize"
-            :total="filteredErrors.length"
-            layout="prev, pager, next, jumper, total"
+        <!-- 空状态 -->
+        <el-empty
+            v-if="Object.keys(groupedErrors).every(key => groupedErrors[key].length === 0)"
+            :description="$t('grammar.noErrors')"
         />
       </div>
     </div>
+
+    <!-- 更改错误类型对话框 -->
+    <el-dialog
+        v-model="changeTypeDialogVisible"
+        :title="$t('grammar.changeType')"
+        width="400px"
+    >
+      <el-form :model="changeTypeForm">
+        <el-form-item :label="$t('grammar.errorTypeLabel')">
+          <el-select v-model="changeTypeForm.newType" style="width: 100%">
+            <el-option :label="$t('grammar.errorType1')" value="错误1" />
+            <el-option :label="$t('grammar.errorType2')" value="错误2" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="changeTypeDialogVisible = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmChangeType">{{ $t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
   Delete,
   Clock,
   WarningFilled,
-  CircleCheckFilled,
+  Check,
   InfoFilled,
-  CopyDocument
+  Warning,
+  CopyDocument,
+  MoreFilled,
+  Edit
 } from '@element-plus/icons-vue'
 import api from '@/api'
 
+const { t, locale } = useI18n()
+
 const errors = ref([])
+const statistics = ref({
+  total: 0,
+  by_type: {},
+  today_count: 0,
+  week_count: 0
+})
 const searchKeyword = ref('')
-const timeFilter = ref('all')
-const currentPage = ref(1)
-const pageSize = ref(10)
-
-const todayErrors = computed(() => {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return errors.value.filter(e => new Date(e.created_at) >= today).length
+const currentTypeFilter = ref('all')
+const changeTypeDialogVisible = ref(false)
+const changeTypeForm = ref({
+  errorId: null,
+  newType: '错误1'
 })
 
-const weekErrors = computed(() => {
-  const weekAgo = new Date()
-  weekAgo.setDate(weekAgo.getDate() - 7)
-  return errors.value.filter(e => new Date(e.created_at) >= weekAgo).length
-})
-
+// 按搜索关键词筛选
 const filteredErrors = computed(() => {
-  let filtered = errors.value
+  if (!searchKeyword.value) return errors.value
 
-  // 时间筛选
-  if (timeFilter.value !== 'all') {
-    const now = new Date()
-    if (timeFilter.value === 'today') {
-      now.setHours(0, 0, 0, 0)
-      filtered = filtered.filter(e => new Date(e.created_at) >= now)
-    } else if (timeFilter.value === 'week') {
-      now.setDate(now.getDate() - 7)
-      filtered = filtered.filter(e => new Date(e.created_at) >= now)
-    } else if (timeFilter.value === 'month') {
-      now.setMonth(now.getMonth() - 1)
-      filtered = filtered.filter(e => new Date(e.created_at) >= now)
+  const keyword = searchKeyword.value.toLowerCase()
+  return errors.value.filter(e =>
+      e.original_text.toLowerCase().includes(keyword) ||
+      e.llm_suggestion.toLowerCase().includes(keyword) ||
+      e.llm_explanation.toLowerCase().includes(keyword)
+  )
+})
+
+// 按错误类型分组
+const groupedErrors = computed(() => {
+  const groups = {
+    '错误1': [],
+    '错误2': []
+  }
+
+  filteredErrors.value.forEach(error => {
+    if (groups[error.error_type]) {
+      groups[error.error_type].push(error)
     }
-  }
+  })
 
-  // 关键词搜索
-  if (searchKeyword.value) {
-    const keyword = searchKeyword.value.toLowerCase()
-    filtered = filtered.filter(e =>
-        e.original_text.toLowerCase().includes(keyword) ||
-        e.llm_suggestion.toLowerCase().includes(keyword) ||
-        e.llm_explanation.toLowerCase().includes(keyword)
-    )
-  }
-
-  return filtered
+  return groups
 })
 
 onMounted(async () => {
   await loadErrors()
 })
 
-const loadErrors = async () => {
+const loadErrors = async (errorType = 'all') => {
   try {
-    errors.value = await api.getGrammarErrors()
+    const response = await api.getGrammarErrors(errorType)
+    errors.value = response.errors || []
+    statistics.value = response.statistics || {
+      total: 0,
+      by_type: {},
+      today_count: 0,
+      week_count: 0
+    }
   } catch (error) {
     console.error('Load errors:', error)
+    ElMessage.error(t('common.error'))
+  }
+}
+
+const handleTypeChange = async (value) => {
+  await loadErrors(value)
+}
+
+const handleCommand = (command, error) => {
+  if (command === 'delete') {
+    deleteError(error.id)
+  } else if (command === 'changeType') {
+    openChangeTypeDialog(error)
+  }
+}
+
+const openChangeTypeDialog = (error) => {
+  changeTypeForm.value = {
+    errorId: error.id,
+    newType: error.error_type === '错误1' ? '错误2' : '错误1'
+  }
+  changeTypeDialogVisible.value = true
+}
+
+const confirmChangeType = async () => {
+  try {
+    await api.updateGrammarErrorType(changeTypeForm.value.errorId, changeTypeForm.value.newType)
+    ElMessage.success(t('grammar.updateTypeSuccess'))
+    changeTypeDialogVisible.value = false
+    await loadErrors(currentTypeFilter.value)
+  } catch (error) {
+    console.error('Update type error:', error)
+    ElMessage.error(t('grammar.updateTypeFailed'))
   }
 }
 
 const deleteError = async (id) => {
   try {
-    await ElMessageBox.confirm('确定要删除这条记录吗？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
+    await ElMessageBox.confirm(
+        t('grammar.deleteConfirm'),
+        t('chat.hint'),
+        {
+          confirmButtonText: t('common.confirm'),
+          cancelButtonText: t('common.cancel'),
+          type: 'warning'
+        }
+    )
 
     await api.deleteGrammarError(id)
-    errors.value = errors.value.filter(e => e.id !== id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('grammar.deleteSuccess'))
+    await loadErrors(currentTypeFilter.value)
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Delete error:', error)
@@ -211,25 +313,47 @@ const deleteError = async (id) => {
   }
 }
 
-const clearAll = async () => {
+const clearCurrentType = async () => {
+  const currentErrors = groupedErrors.value[currentTypeFilter.value] || []
+
   try {
     await ElMessageBox.confirm(
-        `确定要清空全部 ${errors.value.length} 条记录吗？此操作不可恢复！`,
-        '警告',
+        t('grammar.clearTypeConfirm', { count: currentErrors.length }),
+        t('chat.warning'),
         {
-          confirmButtonText: '确定清空',
-          cancelButtonText: '取消',
+          confirmButtonText: t('chat.confirmClear'),
+          cancelButtonText: t('common.cancel'),
           type: 'warning',
           confirmButtonClass: 'el-button--danger'
         }
     )
 
-    // 批量删除
-    const deletePromises = errors.value.map(e => api.deleteGrammarError(e.id))
-    await Promise.all(deletePromises)
+    await api.clearGrammarErrorsByType(currentTypeFilter.value)
+    ElMessage.success(t('grammar.clearSuccess'))
+    await loadErrors(currentTypeFilter.value)
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Clear type error:', error)
+    }
+  }
+}
 
-    errors.value = []
-    ElMessage.success('已清空所有记录')
+const clearAll = async () => {
+  try {
+    await ElMessageBox.confirm(
+        t('grammar.clearAllConfirm', { count: errors.value.length }),
+        t('chat.warning'),
+        {
+          confirmButtonText: t('chat.confirmClear'),
+          cancelButtonText: t('common.cancel'),
+          type: 'warning',
+          confirmButtonClass: 'el-button--danger'
+        }
+    )
+
+    await api.clearGrammarErrorsByType('all')
+    ElMessage.success(t('grammar.clearSuccess'))
+    await loadErrors(currentTypeFilter.value)
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Clear all error:', error)
@@ -240,15 +364,17 @@ const clearAll = async () => {
 const copyText = async (text) => {
   try {
     await navigator.clipboard.writeText(text)
-    ElMessage.success('已复制到剪贴板')
+    ElMessage.success(t('grammar.copySuccess'))
   } catch (error) {
-    ElMessage.error('复制失败')
+    ElMessage.error(t('grammar.copyFailed'))
   }
 }
 
 const formatDate = (dateString) => {
   const date = new Date(dateString)
-  return date.toLocaleString('zh-CN', {
+  const localeString = locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'
+
+  return date.toLocaleString(localeString, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -287,6 +413,11 @@ const formatDate = (dateString) => {
   color: #303133;
 }
 
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .content {
   flex: 1;
   padding: 30px;
@@ -297,12 +428,46 @@ const formatDate = (dateString) => {
   display: flex;
   gap: 30px;
   margin-bottom: 30px;
+  flex-wrap: wrap;
 }
 
 .filters {
   display: flex;
   gap: 15px;
+  margin-bottom: 30px;
+}
+
+.error-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.error-group {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.group-header {
   margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.group-header h2 {
+  margin: 0;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.group-count {
+  color: #909399;
+  font-size: 16px;
+  font-weight: normal;
 }
 
 .error-list {
@@ -317,6 +482,7 @@ const formatDate = (dateString) => {
 
 .error-card:hover {
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .error-header {
@@ -334,6 +500,11 @@ const formatDate = (dateString) => {
   gap: 5px;
   color: #909399;
   font-size: 14px;
+}
+
+.error-actions {
+  display: flex;
+  gap: 5px;
 }
 
 .error-content {
@@ -383,9 +554,15 @@ const formatDate = (dateString) => {
   line-height: 1.6;
 }
 
-.pagination {
+.deleted-notice {
   display: flex;
-  justify-content: center;
-  margin-top: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: #f4f4f5;
+  border-radius: 4px;
+  color: #909399;
+  font-size: 13px;
+  margin-top: 10px;
 }
 </style>

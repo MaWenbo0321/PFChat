@@ -50,9 +50,12 @@ func main() {
 			auth.DELETE("/messages/clear/:userId", clearChatHistory)
 			auth.DELETE("/messages/mine/:userId", deleteMyMessages)
 
-			// 语法错误记录
-			auth.GET("/grammar-errors", getGrammarErrors)
-			auth.DELETE("/grammar-errors/:id", deleteGrammarError)
+			// 语法错误记录（扩展功能）
+			auth.GET("/grammar-errors", getGrammarErrors)                        // 获取错误记录(支持按类型筛选)
+			auth.DELETE("/grammar-errors/:id", deleteGrammarError)               // 删除单条记录
+			auth.POST("/grammar-errors/batch-delete", batchDeleteGrammarErrors)  // 批量删除
+			auth.DELETE("/grammar-errors/clear/:type", clearGrammarErrorsByType) // 按类型清空
+			auth.PUT("/grammar-errors/:id/type", updateGrammarErrorType)         // 更新错误类型
 
 			// 管理员专用路由
 			admin := auth.Group("/admin")
@@ -65,8 +68,6 @@ func main() {
 
 				// 系统统计
 				admin.GET("/stats", getUserStats)
-
-				// 管理员可以删除任何消息（通过标准消息接口，权限在处理函数中验证）
 			}
 		}
 	}
@@ -126,15 +127,19 @@ func createDefaultAdmin() {
 	}
 }
 
+// CORS 中间件
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		// 处理预检请求
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
 		}
+
 		c.Next()
 	}
 }

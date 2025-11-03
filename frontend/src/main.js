@@ -18,13 +18,24 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 }
 
 // 根据当前语言设置 Element Plus 的语言
-const elementLocale = i18n.global.locale.value === 'zh-CN' ? zhCn : en
+const getElementLocale = () => {
+    return i18n.global.locale.value === 'zh-CN' ? zhCn : en
+}
 
 app.use(pinia)
 app.use(router)
 app.use(i18n)
 app.use(ElementPlus, {
-    locale: elementLocale
+    locale: getElementLocale()
+})
+
+// 监听语言变化,动态更新 Element Plus 语言
+import { watch } from 'vue'
+watch(() => i18n.global.locale.value, () => {
+    // 重新配置 Element Plus 语言
+    app.config.globalProperties.$ELEMENT = {
+        locale: getElementLocale()
+    }
 })
 
 app.mount('#app')
