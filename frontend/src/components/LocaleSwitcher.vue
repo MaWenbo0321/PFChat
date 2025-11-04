@@ -21,7 +21,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Globe, Check } from '@element-plus/icons-vue'
+import { Platform, Check } from '@element-plus/icons-vue'
 import { switchLocale } from '@/utils/locale'
 
 defineProps({

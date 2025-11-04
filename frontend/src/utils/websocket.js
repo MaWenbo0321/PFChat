@@ -9,10 +9,18 @@ class WebSocketManager {
         this.heartbeatTimer = null
         this.reconnectAttempts = 0
         this.maxReconnectAttempts = 5
-        this.grammarCheckCallback = null
+        this.messageHandlers = [] // 存储消息处理函数
     }
 
-    connect(token) {
+    connect() {
+        const userStore = useUserStore()
+        const token = userStore.token
+
+        if (!token) {
+            console.error('No token found, cannot connect WebSocket')
+            return
+        }
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
         const wsUrl = `${protocol}//${window.location.hostname}:8080/ws?token=${token}`
 
@@ -27,7 +35,12 @@ class WebSocketManager {
         }
 
         this.ws.onmessage = (event) => {
-            this.handleMessage(JSON.parse(event.data))
+            try {
+                const message = JSON.parse(event.data)
+                this.handleMessage(message)
+            } catch (error) {
+                console.error('Failed to parse WebSocket message:', error)
+            }
         }
 
         this.ws.onerror = (error) => {
@@ -37,7 +50,7 @@ class WebSocketManager {
         this.ws.onclose = () => {
             console.log('WebSocket disconnected')
             const chatStore = useChatStore()
-            chatStore.connected = false
+            chatStore.closeWebSocket()
             this.stopHeartbeat()
             this.attemptReconnect()
         }
@@ -57,8 +70,8 @@ class WebSocketManager {
 
                 chatStore.addMessage(otherUserId, msg)
 
-                // 如果不是当前聊天用户发的消息，显示通知
-                if (chatStore.currentChatUser?.id !== otherUserId) {
+                // 如果不是当前聊天用户发的消息,显示通知
+                if (chatStore.currentUser?.id !== otherUserId) {
                     ElMessage.info(`${msg.sender.username} 发来新消息`)
                 }
                 break
@@ -67,6 +80,30 @@ class WebSocketManager {
                 // 语法检查结果
                 this.handleGrammarCheck(message.data)
                 break
+        }
+
+        // 调用所有注册的消息处理函数
+        this.messageHandlers.forEach(handler => {
+            try {
+                handler(message)
+            } catch (error) {
+                console.error('Error in message handler:', error)
+            }
+        })
+    }
+
+    // 添加消息处理函数
+    onMessage(handler) {
+        if (typeof handler === 'function') {
+            this.messageHandlers.push(handler)
+        }
+    }
+
+    // 移除消息处理函数
+    offMessage(handler) {
+        const index = this.messageHandlers.indexOf(handler)
+        if (index > -1) {
+            this.messageHandlers.splice(index, 1)
         }
     }
 
@@ -129,11 +166,11 @@ class WebSocketManager {
             this.reconnectTimer = setTimeout(() => {
                 const userStore = useUserStore()
                 if (userStore.token) {
-                    this.connect(userStore.token)
+                    this.connect()
                 }
             }, 3000 * this.reconnectAttempts) // 递增延迟
         } else {
-            ElMessage.error('WebSocket 连接失败，请刷新页面重试')
+            ElMessage.error('WebSocket 连接失败,请刷新页面重试')
         }
     }
 
@@ -146,6 +183,7 @@ class WebSocketManager {
             this.ws.close()
             this.ws = null
         }
+        this.messageHandlers = []
     }
 }
 

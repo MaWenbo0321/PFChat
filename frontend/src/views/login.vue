@@ -166,7 +166,7 @@ const handleLogin = async () => {
     userStore.setUserInfo(response.user)
 
     ElMessage.success(t('login.loginSuccess'))
-    router.push('/chat')
+    await router.push('/chat')
   } catch (error) {
     console.error('Login error:', error)
   } finally {
@@ -212,7 +212,7 @@ const handleRegister = async () => {
     userStore.setUserInfo(response.user)
 
     ElMessage.success(t('login.registerSuccess'))
-    router.push('/chat')
+    await router.push('/chat')
   } catch (error) {
     if (error === 'cancel') {
       ElMessage.info(t('login.registerCanceled'))

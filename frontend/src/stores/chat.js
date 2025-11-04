@@ -8,10 +8,17 @@ export const useChatStore = defineStore('chat', () => {
     const ws = ref(null)
     const connected = ref(false)
 
+    // 计算属性 - 当前聊天用户
+    const currentUser = computed(() => currentChatUser.value)
+
+    // 计算属性 - 当前消息列表
     const currentMessages = computed(() => {
         if (!currentChatUser.value) return []
         return messages.value[currentChatUser.value.id] || []
     })
+
+    // 计算属性 - 连接状态
+    const isConnected = computed(() => connected.value)
 
     const setUsers = (userList) => {
         users.value = userList
@@ -19,6 +26,17 @@ export const useChatStore = defineStore('chat', () => {
 
     const setCurrentChatUser = (user) => {
         currentChatUser.value = user
+    }
+
+    // 别名方法 - 为了兼容性
+    const selectUser = (user) => {
+        currentChatUser.value = user
+    }
+
+    const setCurrentMessages = (messageList) => {
+        if (currentChatUser.value) {
+            messages.value[currentChatUser.value.id] = messageList
+        }
     }
 
     const setMessages = (userId, messageList) => {
@@ -30,6 +48,17 @@ export const useChatStore = defineStore('chat', () => {
             messages.value[userId] = []
         }
         messages.value[userId].push(message)
+    }
+
+    const removeMessage = (messageId) => {
+        if (currentChatUser.value) {
+            const userId = currentChatUser.value.id
+            if (messages.value[userId]) {
+                messages.value[userId] = messages.value[userId].filter(
+                    msg => msg.id !== messageId
+                )
+            }
+        }
     }
 
     const setWebSocket = (websocket) => {
@@ -49,13 +78,18 @@ export const useChatStore = defineStore('chat', () => {
         users,
         messages,
         currentChatUser,
+        currentUser, // 添加别名
         currentMessages,
         ws,
         connected,
+        isConnected, // 添加别名
         setUsers,
         setCurrentChatUser,
+        selectUser, // 添加别名方法
+        setCurrentMessages,
         setMessages,
         addMessage,
+        removeMessage,
         setWebSocket,
         closeWebSocket
     }
