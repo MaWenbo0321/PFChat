@@ -6,6 +6,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// 语法错误类型常量
+const (
+	ErrorTypePragmalinguistic = "语言语用失误" // 语言语用失误
+	ErrorTypeSociopragmatic   = "社会语用失误" // 社会语用失误
+)
+
 // 用户角色常量
 const (
 	RoleUser  = "user"
@@ -40,15 +46,14 @@ type Message struct {
 type GrammarError struct {
 	ID             uint      `json:"id" gorm:"primaryKey"`
 	UserID         uint      `json:"user_id" gorm:"not null;index"`
-	MessageID      uint      `json:"message_id" gorm:"index"` // 关联的消息ID
+	MessageID      uint      `json:"message_id" gorm:"index"`
 	OriginalText   string    `json:"original_text" gorm:"type:text;not null"`
-	LLMSuggestion  string    `json:"llm_suggestion" gorm:"type:text"`
-	LLMExplanation string    `json:"llm_explanation" gorm:"type:text"`
-	ErrorType      string    `json:"error_type" gorm:"type:varchar(50);not null;default:'错误1';index"` // 新增: 错误类型
-	MessageDeleted bool      `json:"message_deleted" gorm:"default:false"`                            // 标记原消息是否被删除
+	LLMSuggestion  string    `json:"llm_suggestion" gorm:"type:text"`                                    // 🔧 确保是 text 类型
+	LLMExplanation string    `json:"llm_explanation" gorm:"type:text"`                                   // 🔧 确保是 text 类型
+	ErrorType      string    `json:"error_type" gorm:"type:varchar(50);not null;default:'语言语用失误';index"` // 🔧 更新默认值
+	MessageDeleted bool      `json:"message_deleted" gorm:"default:false"`
 	CreatedAt      time.Time `json:"created_at"`
 
-	// 关联
 	User User `json:"user" gorm:"foreignKey:UserID"`
 }
 
@@ -59,9 +64,9 @@ func (GrammarError) TableName() string {
 
 // BeforeCreate 创建前的钩子
 func (ge *GrammarError) BeforeCreate(tx *gorm.DB) error {
-	// 如果没有设置错误类型,默认为"错误1"
+	// 如果没有设置错误类型,默认为语言语用失误
 	if ge.ErrorType == "" {
-		ge.ErrorType = "错误3"
+		ge.ErrorType = ErrorTypePragmalinguistic
 	}
 	return nil
 }

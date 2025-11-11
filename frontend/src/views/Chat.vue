@@ -142,11 +142,20 @@
       </div>
     </div>
   </div>
+  <!-- 语用失误检测对话框 -->
+  <ErrorCheckDialog
+      v-model="showErrorDialog"
+      :error-data="errorCheckData"
+      @send-original="handleSendOriginal"
+      @send-edited="handleSendEdited"
+      @cancel="handleCancelSend"
+  />
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import ErrorCheckDialog from '@/components/ErrorCheckDialog.vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -162,6 +171,15 @@ import { useUserStore } from '@/stores/user'
 import { useChatStore } from '@/stores/chat'
 import wsManager from '@/utils/websocket'
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
+
+// 错误检测相关状态
+const showErrorDialog = ref(false)
+const errorCheckData = ref({
+  original_content: '',
+  suggestion: '',
+  explanation: '',
+  error_type: ''
+})
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -224,18 +242,85 @@ watch(() => chatStore.currentUser, async (newUser) => {
 const sendMessage = async () => {
   if (!messageInput.value.trim() || !chatStore.currentUser) return
 
+  const content = messageInput.value.trim()
+  const receiverId = chatStore.currentUser.id
+
+  try {
+    // 调用发送前检测 API
+    const checkResult = await api.checkMessageBeforeSend({
+      receiver_id: receiverId,
+      content: content
+    })
+
+    // 如果检测到语用失误，显示编辑对话框
+    if (checkResult.has_error) {
+      errorCheckData.value = {
+        original_content: content,
+        suggestion: checkResult.suggestion || '',
+        explanation: checkResult.explanation || '',
+        error_type: checkResult.error_type || '语言语用失误'
+      }
+      showErrorDialog.value = true
+      // 不清空输入框，保留原文
+    } else {
+      // 没有错误，直接发送
+      await sendMessageDirectly(content, receiverId)
+      messageInput.value = '' // 发送成功后清空
+    }
+  } catch (error) {
+    console.error('Check message error:', error)
+    ElMessage.error(t('chat.checkFailed'))
+  }
+}
+
+// 直接发送消息（无错误或用户确认后）
+const sendMessageDirectly = async (content, receiverId) => {
   try {
     const message = {
-      receiver_id: chatStore.currentUser.id,
-      content: messageInput.value.trim()
+      receiver_id: receiverId,
+      content: content
     }
-
     await api.sendMessage(message)
-    messageInput.value = ''
+    ElMessage.success(t('chat.sendSuccess'))
   } catch (error) {
     console.error('Send message error:', error)
     ElMessage.error(t('chat.sendFailed'))
   }
+}
+
+// 处理发送原始消息
+const handleSendOriginal = async (content) => {
+  if (!chatStore.currentUser) return
+  await sendMessageDirectly(content, chatStore.currentUser.id)
+  messageInput.value = '' // 发送成功后清空
+}
+
+// 处理发送编辑后的消息
+const handleSendEdited = async (content) => {
+  if (!chatStore.currentUser) return
+  await sendMessageDirectly(content, chatStore.currentUser.id)
+  messageInput.value = '' // 发送成功后清空
+}
+
+// 处理取消发送
+const handleCancelSend = () => {
+  ElMessage.info(t('chat.sendCancelled'))
+  // 不清空输入框，用户可能想继续编辑
+}
+
+// 保存错误记录并发送消息
+const saveErrorAndSend = async (content, receiverId, checkResult) => {
+  // 先发送消息
+  const message = {
+    receiver_id: receiverId,
+    content: content
+  }
+  const sentMessage = await api.sendMessage(message)
+
+  // 保存语用错误记录到数据库（通过后端自动完成）
+  // 注意：我们需要在后端添加逻辑来保存用户确认发送的错误消息
+
+  ElMessage.success(t('chat.sendSuccess'))
 }
 
 const deleteMessage = async (messageId) => {

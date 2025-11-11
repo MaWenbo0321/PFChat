@@ -167,82 +167,89 @@ func getCountryName(countryCode string) string {
 
 // 调用 Ollama API
 func callOllamaAPI(prompt string) (*GrammarCheckResponse, error) {
-	// 构建请求
 	reqBody := OllamaRequest{
 		Model:  ollamaModel,
 		Prompt: prompt,
 		Stream: false,
 		Options: map[string]interface{}{
-			"temperature": 0.3, // 降低温度以获得更确定的结果
-			"top_p":       0.9,
+			"temperature": 0.7,
+			"num_predict": 500,
 		},
 	}
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request error: %w", err)
+		return nil, fmt.Errorf("marshal request failed: %v", err)
 	}
 
-	// 创建 HTTP 请求
-	req, err := http.NewRequest("POST", ollamaAPIURL, bytes.NewBuffer(jsonData))
+	resp, err := http.Post(ollamaAPIURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("create request error: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	// 发送请求（增加超时时间，本地模型可能响应较慢）
-	client := &http.Client{
-		Timeout: 60 * time.Second,
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("Ollama API request failed: %v", err)
-		// 如果 API 调用失败，返回无错误（避免阻塞消息发送）
-		return &GrammarCheckResponse{HasError: false}, nil
+		return nil, fmt.Errorf("HTTP request failed: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// 读取响应
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read response error: %w", err)
+		return nil, fmt.Errorf("read response body failed: %v", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Ollama API error: status=%d, body=%s", resp.StatusCode, string(body))
-		return &GrammarCheckResponse{HasError: false}, nil
-	}
-
-	// 解析 Ollama 响应
 	var ollamaResp OllamaResponse
 	if err := json.Unmarshal(body, &ollamaResp); err != nil {
-		return nil, fmt.Errorf("unmarshal Ollama response error: %w", err)
+		return nil, fmt.Errorf("unmarshal ollama response failed: %v", err)
 	}
 
-	// 提取 JSON 内容
-	content := extractJSON(ollamaResp.Response)
+	responseText := strings.TrimSpace(ollamaResp.Response)
+	log.Printf("LLM Raw Response: %s", responseText)
 
-	// 解析语用失误检查结果
+	// 🔧 方法1: 尝试直接解析 JSON
+	jsonText := extractJSON(responseText)
 	var result GrammarCheckResponse
-	if err := json.Unmarshal([]byte(content), &result); err != nil {
-		log.Printf("Failed to parse LLM response as JSON: %s", content)
-		// 如果无法解析，尝试从文本中提取信息
-		return parseTextResponse(ollamaResp.Response), nil
+
+	if err := json.Unmarshal([]byte(jsonText), &result); err == nil {
+		log.Printf("Successfully parsed JSON result: %+v", result)
+
+		// 🔧 验证和修正错误类型
+		if result.HasError {
+			if result.ErrorType != "语言语用失误" && result.ErrorType != "社会语用失误" {
+				// 尝试从 explanation 推断
+				result.ErrorType = inferErrorType(result.Explanation)
+			}
+		}
+
+		return &result, nil
 	}
 
-	// 验证和规范化错误类型
-	if result.HasError && result.ErrorType != "语言语用失误" && result.ErrorType != "社会语用失误" {
-		// 如果 LLM 返回的错误类型无效，尝试从 explanation 中推断
-		result.ErrorType = inferErrorType(result.Explanation)
+	log.Printf("JSON parsing failed: %v, trying text parsing...", err)
+
+	// 🔧 方法2: 文本解析作为备用
+	result = *parseTextResponse(responseText)
+
+	// 🔧 如果文本解析也失败，返回默认无错误结果
+	if !result.HasError && result.Explanation == "" {
+		log.Printf("Both JSON and text parsing failed, returning no error")
+		return &GrammarCheckResponse{
+			HasError:    false,
+			Suggestion:  "",
+			Explanation: "",
+			ErrorType:   "",
+		}, nil
 	}
 
 	return &result, nil
 }
 
-// 提取 JSON 内容（处理模型可能返回的额外文本）
+// 🔧 改进的 JSON 提取函数
 func extractJSON(text string) string {
+	// 移除 markdown 代码块标记
+	text = strings.ReplaceAll(text, "```json", "")
+	text = strings.ReplaceAll(text, "```", "")
+	text = strings.TrimSpace(text)
+
 	// 查找 JSON 对象的开始和结束位置
 	start := strings.Index(text, "{")
 	end := strings.LastIndex(text, "}")

@@ -30,10 +30,8 @@
       <!-- 统计卡片 -->
       <div class="stats">
         <el-statistic :title="$t('grammar.totalErrors')" :value="statistics.total" />
-        <el-statistic :title="$t('grammar.type1Count')" :value="statistics.by_type['错误1'] || 0" />
-        <el-statistic :title="$t('grammar.type2Count')" :value="statistics.by_type['错误2'] || 0" />
-        <el-statistic :title="$t('grammar.weekErrors')" :value="statistics.week_count" />
-        <el-statistic :title="$t('grammar.todayErrors')" :value="statistics.today_count" />
+        <el-statistic :title="$t('grammar.type1Count')" :value="statistics.by_type['语言语用失误'] || 0" />
+        <el-statistic :title="$t('grammar.type2Count')" :value="statistics.by_type['社会语用失误'] || 0" />
       </div>
 
       <!-- 筛选器 -->
@@ -48,12 +46,12 @@
         <el-select
             v-model="currentTypeFilter"
             :placeholder="$t('grammar.typeFilter')"
-            style="width: 180px"
+            style="width: 250px"
             @change="handleTypeChange"
         >
           <el-option :label="$t('grammar.allTypes')" value="all" />
-          <el-option :label="$t('grammar.errorType1')" value="错误1" />
-          <el-option :label="$t('grammar.errorType2')" value="错误2" />
+          <el-option :label="$t('grammar.errorType1')" value="语言语用失误" />
+          <el-option :label="$t('grammar.errorType2')" value="社会语用失误" />
         </el-select>
       </div>
 
@@ -63,8 +61,8 @@
           <div class="error-group" v-if="groupErrors.length > 0">
             <div class="group-header">
               <h2>
-                <el-tag :type="errorType === '错误1' ? 'danger' : 'warning'" size="large">
-                  {{ errorType === '错误1' ? $t('grammar.errorType1') : $t('grammar.errorType2') }}
+                <el-tag :type="errorType === '语言语用失误' ? 'danger' : 'warning'" size="large">
+                  {{ errorType === '语言语用失误' ? $t('grammar.errorType1') : $t('grammar.errorType2') }}
                 </el-tag>
                 <span class="group-count">({{ groupErrors.length }})</span>
               </h2>
@@ -155,16 +153,12 @@
     </div>
 
     <!-- 更改错误类型对话框 -->
-    <el-dialog
-        v-model="changeTypeDialogVisible"
-        :title="$t('grammar.changeType')"
-        width="400px"
-    >
+    <el-dialog v-model="changeTypeDialogVisible" :title="$t('grammar.changeType')" width="400px">
       <el-form :model="changeTypeForm">
         <el-form-item :label="$t('grammar.errorTypeLabel')">
           <el-select v-model="changeTypeForm.newType" style="width: 100%">
-            <el-option :label="$t('grammar.errorType1')" value="错误1" />
-            <el-option :label="$t('grammar.errorType2')" value="错误2" />
+            <el-option :label="$t('grammar.errorType1')" value="语言语用失误" />
+            <el-option :label="$t('grammar.errorType2')" value="社会语用失误" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -208,7 +202,7 @@ const currentTypeFilter = ref('all')
 const changeTypeDialogVisible = ref(false)
 const changeTypeForm = ref({
   errorId: null,
-  newType: '错误1'
+  newType: '语言语用失误'  // 原来是 '错误1'
 })
 
 // 按搜索关键词筛选
@@ -226,8 +220,8 @@ const filteredErrors = computed(() => {
 // 按错误类型分组
 const groupedErrors = computed(() => {
   const groups = {
-    '错误1': [],
-    '错误2': []
+    '语言语用失误': [],  // 原来是 '错误1'
+    '社会语用失误': []   // 原来是 '错误2'
   }
 
   filteredErrors.value.forEach(error => {
@@ -274,7 +268,7 @@ const handleCommand = (command, error) => {
 const openChangeTypeDialog = (error) => {
   changeTypeForm.value = {
     errorId: error.id,
-    newType: error.error_type === '错误1' ? '错误2' : '错误1'
+    newType: error.error_type === '语言语用失误' ? '社会语用失误' : '语言语用失误'
   }
   changeTypeDialogVisible.value = true
 }

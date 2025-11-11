@@ -46,6 +46,7 @@ func main() {
 			// 消息相关
 			auth.GET("/messages/:userId", getMessages)
 			auth.POST("/messages", sendMessage)
+			auth.POST("/messages/check", checkMessageBeforeSend)
 			auth.DELETE("/messages/:id", deleteMessage)
 			auth.DELETE("/messages/clear/:userId", clearChatHistory)
 			auth.DELETE("/messages/mine/:userId", deleteMyMessages)

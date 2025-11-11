@@ -77,14 +77,20 @@ func sendMessage(c *gin.Context) {
 		return
 	}
 
-	currentUserID := getCurrentUserID(c)
+	senderID := getCurrentUserID(c)
 
-	// 创建消息
+	// 检查接收者是否存在
+	var receiver User
+	if err := db.First(&receiver, req.ReceiverID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "接收者不存在"})
+		return
+	}
+
+	// 保存消息
 	message := Message{
-		SenderID:   currentUserID,
+		SenderID:   senderID,
 		ReceiverID: req.ReceiverID,
 		Content:    req.Content,
-		CreatedAt:  time.Now(),
 	}
 
 	if err := db.Create(&message).Error; err != nil {
@@ -95,8 +101,22 @@ func sendMessage(c *gin.Context) {
 	// 预加载关联数据
 	db.Preload("Sender").Preload("Receiver").First(&message, message.ID)
 
-	// 异步进行语法检查
-	go checkGrammar(currentUserID, message)
+	// 🔧 注释掉或删除异步语法检查 - 因为已在发送前检查过
+	// go checkGrammar(senderID, message)
+
+	// 通过 WebSocket 发送给接收者
+	wsMsg := WSMessage{
+		Type:      "message",
+		Data:      message,
+		Timestamp: message.CreatedAt,
+	}
+
+	msgBytes, _ := json.Marshal(wsMsg)
+	if globalHub != nil {
+		globalHub.sendToUser(req.ReceiverID, msgBytes)
+		// 同时发送给发送者（用于多设备同步）
+		globalHub.sendToUser(senderID, msgBytes)
+	}
 
 	c.JSON(http.StatusOK, message)
 }
@@ -414,8 +434,8 @@ func updateGrammarErrorType(c *gin.Context) {
 		return
 	}
 
-	// 验证错误类型
-	if req.ErrorType != "错误1" && req.ErrorType != "错误2" {
+	// 🔧 验证错误类型 - 使用新的常量
+	if req.ErrorType != ErrorTypePragmalinguistic && req.ErrorType != ErrorTypeSociopragmatic {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的错误类型"})
 		return
 	}

@@ -3,6 +3,10 @@ import { useUserStore } from '@/stores/user'
 
 const routes = [
     {
+        path: '/',
+        redirect: '/chat'
+    },
+    {
         path: '/login',
         name: 'Login',
         component: () => import('@/views/Login.vue'),

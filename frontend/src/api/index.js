@@ -26,8 +26,10 @@ instance.interceptors.request.use(
 )
 
 // 响应拦截器
+// 响应拦截器
 instance.interceptors.response.use(
     response => {
+        // 🔧 直接返回 data,后端已经返回正确格式
         return response.data
     },
     error => {
@@ -42,6 +44,7 @@ instance.interceptors.response.use(
             } else if (status === 403) {
                 ElMessage.error('权限不足')
             } else if (status === 500) {
+                // 🔧 确保显示后端返回的错误信息
                 ElMessage.error(data.error || '服务器错误')
             } else {
                 ElMessage.error(data.error || '请求失败')
@@ -63,10 +66,13 @@ const api = {
     getUsers: () => instance.get('/users'),
     getUserInfo: (id) => instance.get(`/users/${id}`),
 
+
     // 消息相关
     getMessages: (userId) => instance.get(`/messages/${userId}`),
     sendMessage: (data) => instance.post('/messages', data),
+    checkMessageBeforeSend: (data) => instance.post('/messages/check', data),  // 🔧 添加这行
     deleteMessage: (id) => instance.delete(`/messages/${id}`),
+
     clearChatHistory: (userId) => instance.delete(`/messages/clear/${userId}`),
     deleteMyMessages: (userId) => instance.delete(`/messages/mine/${userId}`),
 
