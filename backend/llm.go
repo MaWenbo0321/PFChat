@@ -14,7 +14,7 @@ import (
 // Ollama API 配置
 const (
 	ollamaAPIURL = "http://localhost:11434/api/generate" // Ollama 默认地址
-	ollamaModel  = "qwen3:4b"                            // 使用 qwen3:4b 模型
+	ollamaModel  = "gemma3:4b"                           // 使用 qwen3:4b 模型
 )
 
 // Ollama 请求结构
@@ -132,7 +132,7 @@ func buildPrompt(history []Message, current Message, sender User, receiver User)
 	sb.WriteString("   - 例如：话题不当、称呼不当、忽视文化差异、违反社交距离等\n\n")
 
 	// JSON 格式要求
-	sb.WriteString("请严格按照以下 JSON 格式返回结果，不要添加任何其他内容:\n")
+	sb.WriteString("请严格按照以下 JSON 格式返回结果，不要添加任何其他内容,也不要有任何推理过程:\n")
 	sb.WriteString("{\n")
 	sb.WriteString("  \"has_error\": true/false,\n")
 	sb.WriteString("  \"suggestion\": \"建议的表达方式\",\n")
@@ -173,7 +173,7 @@ func callOllamaAPI(prompt string) (*GrammarCheckResponse, error) {
 		Stream: false,
 		Options: map[string]interface{}{
 			"temperature": 0.7,
-			"num_predict": 500,
+			"num_predict": 1024,
 		},
 	}
 
@@ -226,20 +226,6 @@ func callOllamaAPI(prompt string) (*GrammarCheckResponse, error) {
 
 	log.Printf("JSON parsing failed: %v, trying text parsing...", err)
 
-	// 🔧 方法2: 文本解析作为备用
-	result = *parseTextResponse(responseText)
-
-	// 🔧 如果文本解析也失败，返回默认无错误结果
-	if !result.HasError && result.Explanation == "" {
-		log.Printf("Both JSON and text parsing failed, returning no error")
-		return &GrammarCheckResponse{
-			HasError:    false,
-			Suggestion:  "",
-			Explanation: "",
-			ErrorType:   "",
-		}, nil
-	}
-
 	return &result, nil
 }
 
@@ -259,50 +245,6 @@ func extractJSON(text string) string {
 	}
 
 	return text[start : end+1]
-}
-
-// 从文本响应中解析结果（备用方案）
-func parseTextResponse(text string) *GrammarCheckResponse {
-	text = strings.ToLower(text)
-
-	// 如果包含"没有失误"、"correct"等关键词，认为没有错误
-	noErrorKeywords := []string{
-		"没有失误", "没有语用失误", "no error", "correct",
-		"恰当", "appropriate", "合适", "suitable",
-	}
-	for _, keyword := range noErrorKeywords {
-		if strings.Contains(text, keyword) {
-			return &GrammarCheckResponse{
-				HasError:    false,
-				Suggestion:  "",
-				Explanation: "",
-				ErrorType:   "",
-			}
-		}
-	}
-
-	// 如果包含"失误"、"error"等关键词，但无法解析详细信息
-	errorKeywords := []string{"失误", "error", "mistake", "inappropriate", "不当", "不恰当"}
-	for _, keyword := range errorKeywords {
-		if strings.Contains(text, keyword) {
-			// 尝试推断错误类型
-			errorType := inferErrorType(text)
-			return &GrammarCheckResponse{
-				HasError:    true,
-				Suggestion:  "",
-				Explanation: "检测到可能的语用失误，但无法提供详细建议",
-				ErrorType:   errorType,
-			}
-		}
-	}
-
-	// 默认返回无错误
-	return &GrammarCheckResponse{
-		HasError:    false,
-		Suggestion:  "",
-		Explanation: "",
-		ErrorType:   "",
-	}
 }
 
 // 根据错误说明推断错误类型
