@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -14,10 +15,11 @@ type CheckMessageRequest struct {
 
 // CheckMessageResponse 发送前检查响应
 type CheckMessageResponse struct {
-	HasError    bool   `json:"has_error"`
-	Suggestion  string `json:"suggestion"`
-	Explanation string `json:"explanation"`
-	ErrorType   string `json:"error_type"` // "语言语用失误" 或 "社会语用失误"
+	HasError      bool   `json:"has_error"`
+	Suggestion    string `json:"suggestion"`
+	Explanation   string `json:"explanation"`
+	ErrorType     string `json:"error_type"`      // "语言语用失误" 或 "社会语用失误"
+	ErrorRecordID uint   `json:"error_record_id"` // 🔧 新增：保存的错误记录ID
 }
 
 // 发送前检查消息是否有语用失误
@@ -71,11 +73,34 @@ func checkMessageBeforeSend(c *gin.Context) {
 		errorType = "语言语用失误" // 默认值
 	}
 
+	var errorRecordID uint = 0
+
+	// 🔧 如果检测到语用失误，立即保存到数据库
+	if result.HasError {
+		grammarError := GrammarError{
+			UserID:         userID,
+			MessageID:      0, // 🔧 消息还未发送，设为 0
+			OriginalText:   req.Content,
+			LLMSuggestion:  result.Suggestion,
+			LLMExplanation: result.Explanation,
+			ErrorType:      errorType,
+		}
+
+		if err := db.Create(&grammarError).Error; err != nil {
+			log.Printf("保存语用错误记录失败: %v", err)
+			// 不影响检查结果返回，继续执行
+		} else {
+			errorRecordID = grammarError.ID
+			log.Printf("语用错误已保存到数据库，记录ID: %d", errorRecordID)
+		}
+	}
+
 	// 返回检查结果
 	c.JSON(http.StatusOK, CheckMessageResponse{
-		HasError:    result.HasError,
-		Suggestion:  result.Suggestion,
-		Explanation: result.Explanation,
-		ErrorType:   errorType,
+		HasError:      result.HasError,
+		Suggestion:    result.Suggestion,
+		Explanation:   result.Explanation,
+		ErrorType:     errorType,
+		ErrorRecordID: errorRecordID, // 🔧 返回保存的记录ID
 	})
 }

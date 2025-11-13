@@ -258,13 +258,14 @@ const sendMessage = async () => {
         original_content: content,
         suggestion: checkResult.suggestion || '',
         explanation: checkResult.explanation || '',
-        error_type: checkResult.error_type || '语言语用失误'
+        error_type: checkResult.error_type || '语言语用失误',
+        error_record_id: checkResult.error_record_id || 0  // 🔧 保存记录ID
       }
       showErrorDialog.value = true
       // 不清空输入框，保留原文
     } else {
       // 没有错误，直接发送
-      await sendMessageDirectly(content, receiverId)
+      await sendMessageDirectly(content, receiverId, 0)
       messageInput.value = '' // 发送成功后清空
     }
   } catch (error) {
@@ -273,12 +274,13 @@ const sendMessage = async () => {
   }
 }
 
-// 直接发送消息（无错误或用户确认后）
-const sendMessageDirectly = async (content, receiverId) => {
+// 直接发送消息（带错误记录ID）
+const sendMessageDirectly = async (content, receiverId, errorRecordId = 0) => {
   try {
     const message = {
       receiver_id: receiverId,
-      content: content
+      content: content,
+      error_record_id: errorRecordId  // 🔧 传递错误记录ID
     }
     await api.sendMessage(message)
     ElMessage.success(t('chat.sendSuccess'))
@@ -288,24 +290,27 @@ const sendMessageDirectly = async (content, receiverId) => {
   }
 }
 
-// 处理发送原始消息
+// 处理发送原始消息（带错误记录ID）
 const handleSendOriginal = async (content) => {
   if (!chatStore.currentUser) return
-  await sendMessageDirectly(content, chatStore.currentUser.id)
+  // 🔧 传递错误记录ID
+  await sendMessageDirectly(content, chatStore.currentUser.id, errorCheckData.value.error_record_id)
   messageInput.value = '' // 发送成功后清空
 }
 
 // 处理发送编辑后的消息
 const handleSendEdited = async (content) => {
   if (!chatStore.currentUser) return
-  await sendMessageDirectly(content, chatStore.currentUser.id)
+  // 🔧 用户修改了内容，不传递错误记录ID（因为内容已改变）
+  await sendMessageDirectly(content, chatStore.currentUser.id, 0)
   messageInput.value = '' // 发送成功后清空
 }
 
 // 处理取消发送
 const handleCancelSend = () => {
   ElMessage.info(t('chat.sendCancelled'))
-  // 不清空输入框，用户可能想继续编辑
+  // 错误已经保存在数据库中（message_id 为 0）
+  // 用户可以在错误记录页面查看所有检测到的错误
 }
 
 // 保存错误记录并发送消息

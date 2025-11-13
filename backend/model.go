@@ -51,7 +51,6 @@ type GrammarError struct {
 	LLMSuggestion  string    `json:"llm_suggestion" gorm:"type:text"`                                    // 🔧 确保是 text 类型
 	LLMExplanation string    `json:"llm_explanation" gorm:"type:text"`                                   // 🔧 确保是 text 类型
 	ErrorType      string    `json:"error_type" gorm:"type:varchar(50);not null;default:'语言语用失误';index"` // 🔧 更新默认值
-	MessageDeleted bool      `json:"message_deleted" gorm:"default:false"`
 	CreatedAt      time.Time `json:"created_at"`
 
 	User User `json:"user" gorm:"foreignKey:UserID"`
@@ -94,11 +93,6 @@ type LoginRequest struct {
 type LoginResponse struct {
 	Token string `json:"token"`
 	User  User   `json:"user"`
-}
-
-type SendMessageRequest struct {
-	ReceiverID uint   `json:"receiver_id" binding:"required"`
-	Content    string `json:"content" binding:"required"`
 }
 
 // 管理员相关请求结构

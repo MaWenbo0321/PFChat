@@ -70,6 +70,14 @@ func getMessages(c *gin.Context) {
 }
 
 // HTTP 发送消息接口
+// SendMessageRequest 发送消息请求
+type SendMessageRequest struct {
+	ReceiverID    uint   `json:"receiver_id" binding:"required"`
+	Content       string `json:"content" binding:"required"`
+	ErrorRecordID uint   `json:"error_record_id"` // 🔧 新增：关联的错误记录ID
+}
+
+// HTTP 发送消息接口
 func sendMessage(c *gin.Context) {
 	var req SendMessageRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -101,8 +109,21 @@ func sendMessage(c *gin.Context) {
 	// 预加载关联数据
 	db.Preload("Sender").Preload("Receiver").First(&message, message.ID)
 
-	// 🔧 注释掉或删除异步语法检查 - 因为已在发送前检查过
-	// go checkGrammar(senderID, message)
+	// 🔧 如果有关联的错误记录ID，更新该记录的 message_id
+	if req.ErrorRecordID > 0 {
+		var grammarError GrammarError
+		if err := db.First(&grammarError, req.ErrorRecordID).Error; err == nil {
+			// 验证该错误记录属于当前用户
+			if grammarError.UserID == senderID {
+				grammarError.MessageID = message.ID
+				if err := db.Save(&grammarError).Error; err != nil {
+					log.Printf("更新错误记录的 message_id 失败: %v", err)
+				} else {
+					log.Printf("已更新错误记录 %d 的 message_id 为 %d", req.ErrorRecordID, message.ID)
+				}
+			}
+		}
+	}
 
 	// 通过 WebSocket 发送给接收者
 	wsMsg := WSMessage{

@@ -141,6 +141,7 @@ func buildPrompt(history []Message, current Message, sender User, receiver User)
 	sb.WriteString("}\n\n")
 	sb.WriteString("如果没有语用失误，请返回:\n")
 	sb.WriteString("{\"has_error\": false, \"suggestion\": \"\", \"explanation\": \"\", \"error_type\": \"\"}")
+	sb.WriteString("重要提醒:请根据发送者的国籍选择回复的语言。如果发送者是中国用户，请用中文回复；如果发送者是其他国家用户，请用英文回复。\n")
 
 	return sb.String()
 }

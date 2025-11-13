@@ -25,8 +25,8 @@
                 style="margin-left: 10px;"
             >
               {{ errorData.error_type === '语言语用失误'
-                ? $t('grammar.pragmalinguisticError')
-                : $t('grammar.sociopragmaticError') }}
+                ? $t('grammar.errorType1')
+                : $t('grammar.errorType2') }}
             </el-tag>
           </div>
         </template>
