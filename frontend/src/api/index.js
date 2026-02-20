@@ -5,7 +5,7 @@ import router from '@/router'
 // 创建 axios 实例
 const instance = axios.create({
     baseURL: '/api',
-    timeout: 10000,
+    timeout: 30000, // AI chat 可能需要较长时间
     headers: {
         'Content-Type': 'application/json'
     }
@@ -26,10 +26,8 @@ instance.interceptors.request.use(
 )
 
 // 响应拦截器
-// 响应拦截器
 instance.interceptors.response.use(
     response => {
-        // 🔧 直接返回 data,后端已经返回正确格式
         return response.data
     },
     error => {
@@ -44,7 +42,6 @@ instance.interceptors.response.use(
             } else if (status === 403) {
                 ElMessage.error('权限不足')
             } else if (status === 500) {
-                // 🔧 确保显示后端返回的错误信息
                 ElMessage.error(data.error || '服务器错误')
             } else {
                 ElMessage.error(data.error || '请求失败')
@@ -66,15 +63,22 @@ const api = {
     getUsers: () => instance.get('/users'),
     getUserInfo: (id) => instance.get(`/users/${id}`),
 
-
     // 消息相关
     getMessages: (userId) => instance.get(`/messages/${userId}`),
     sendMessage: (data) => instance.post('/messages', data),
-    checkMessageBeforeSend: (data) => instance.post('/messages/check', data),  // 🔧 添加这行
+    checkMessageBeforeSend: (data) => instance.post('/messages/check', data),
     deleteMessage: (id) => instance.delete(`/messages/${id}`),
-
     clearChatHistory: (userId) => instance.delete(`/messages/clear/${userId}`),
     deleteMyMessages: (userId) => instance.delete(`/messages/mine/${userId}`),
+
+    // 🆕 实时检测接口 (Grammarly 风格, 每5秒调用)
+    realtimeCheck: (data) => instance.post('/messages/realtime-check', data),
+
+    // 🆕 获取消息关联的语用错误 (接收方使用)
+    getMessageErrors: (messageIds) => instance.post('/messages/errors', { message_ids: messageIds }),
+
+    // 🆕 AI Chat 接口
+    aiChat: (data) => instance.post('/ai/chat', data),
 
     // 语法错误相关
     getGrammarErrors: (errorType = 'all') => {
@@ -83,17 +87,14 @@ const api = {
     },
     deleteGrammarError: (id) => instance.delete(`/grammar-errors/${id}`),
     batchDeleteGrammarErrors: (ids) => instance.post('/grammar-errors/batch-delete', { ids }),
-    clearGrammarErrorsByType: (type) => instance.delete(`/grammar-errors/clear/${type}`),
-    updateGrammarErrorType: (id, errorType) =>
-        instance.put(`/grammar-errors/${id}/type`, { error_type: errorType }),
+    clearGrammarErrors: (type = 'all') => instance.delete(`/grammar-errors/clear/${type}`),
+    updateGrammarErrorType: (id, errorType) => instance.put(`/grammar-errors/${id}/type`, { error_type: errorType }),
 
-    // 管理员接口
-    admin: {
-        getAllUsers: () => instance.get('/admin/users'),
-        deleteUser: (id) => instance.delete(`/admin/users/${id}`),
-        updateUserRole: (id, role) => instance.put(`/admin/users/${id}/role`, { role }),
-        getStats: () => instance.get('/admin/stats')
-    }
+    // 管理员相关
+    getAllUsers: () => instance.get('/admin/users'),
+    deleteUser: (id) => instance.delete(`/admin/users/${id}`),
+    updateUserRole: (id, role) => instance.put(`/admin/users/${id}/role`, { role }),
+    getUserStats: () => instance.get('/admin/stats')
 }
 
 export default api

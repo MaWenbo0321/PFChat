@@ -21,9 +21,9 @@ const (
 type User struct {
 	ID        uint           `json:"id" gorm:"primaryKey"`
 	Username  string         `json:"username" gorm:"uniqueIndex;not null"`
-	Password  string         `json:"-" gorm:"not null"` // 密码不返回给前端
+	Password  string         `json:"-" gorm:"not null"`
 	Country   string         `json:"country" gorm:"not null"`
-	Role      string         `json:"role" gorm:"default:user"` // user 或 admin
+	Role      string         `json:"role" gorm:"default:user"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
@@ -35,6 +35,7 @@ type Message struct {
 	SenderID   uint      `json:"sender_id" gorm:"not null;index"`
 	ReceiverID uint      `json:"receiver_id" gorm:"not null;index"`
 	Content    string    `json:"content" gorm:"type:text;not null"`
+	IsRead     bool      `json:"is_read" gorm:"default:false"`
 	CreatedAt  time.Time `json:"created_at"`
 
 	// 关联
@@ -48,9 +49,9 @@ type GrammarError struct {
 	UserID         uint      `json:"user_id" gorm:"not null;index"`
 	MessageID      uint      `json:"message_id" gorm:"index"`
 	OriginalText   string    `json:"original_text" gorm:"type:text;not null"`
-	LLMSuggestion  string    `json:"llm_suggestion" gorm:"type:text"`                                    // 🔧 确保是 text 类型
-	LLMExplanation string    `json:"llm_explanation" gorm:"type:text"`                                   // 🔧 确保是 text 类型
-	ErrorType      string    `json:"error_type" gorm:"type:varchar(50);not null;default:'语言语用失误';index"` // 🔧 更新默认值
+	LLMSuggestion  string    `json:"llm_suggestion" gorm:"type:text"`
+	LLMExplanation string    `json:"llm_explanation" gorm:"type:text"`
+	ErrorType      string    `json:"error_type" gorm:"type:varchar(50);not null;default:'语言语用失误';index"`
 	CreatedAt      time.Time `json:"created_at"`
 
 	User User `json:"user" gorm:"foreignKey:UserID"`
@@ -63,11 +64,24 @@ func (GrammarError) TableName() string {
 
 // BeforeCreate 创建前的钩子
 func (ge *GrammarError) BeforeCreate(tx *gorm.DB) error {
-	// 如果没有设置错误类型,默认为语言语用失误
 	if ge.ErrorType == "" {
 		ge.ErrorType = ErrorTypePragmalinguistic
 	}
 	return nil
+}
+
+// 🆕 AIChatHistory AI对话历史
+type AIChatHistory struct {
+	ID         uint      `json:"id" gorm:"primaryKey"`
+	UserID     uint      `json:"user_id" gorm:"not null;index"`
+	ChatUserID uint      `json:"chat_user_id" gorm:"index"` // 当前聊天对象ID (上下文)
+	Role       string    `json:"role" gorm:"type:varchar(20);not null"`
+	Content    string    `json:"content" gorm:"type:text;not null"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+func (AIChatHistory) TableName() string {
+	return "ai_chat_history"
 }
 
 // 语法检查结果
@@ -95,30 +109,26 @@ type LoginResponse struct {
 	User  User   `json:"user"`
 }
 
-// 管理员相关请求结构
 type UserManageRequest struct {
 	UserID uint   `json:"user_id" binding:"required"`
-	Action string `json:"action" binding:"required"` // "delete", "promote", "demote"
+	Action string `json:"action" binding:"required"`
 }
 
-// 用户列表响应
 type UserListResponse struct {
 	Users []User `json:"users"`
 	Total int64  `json:"total"`
 }
 
-// 检查用户是否为管理员
 func (u *User) IsAdmin() bool {
 	return u.Role == RoleAdmin
 }
 
-// 检查用户是否为普通用户
 func (u *User) IsUser() bool {
 	return u.Role == RoleUser
 }
 
 type WSMessage struct {
-	Type      string      `json:"type"` // "message", "grammar_check", "online", "offline"
+	Type      string      `json:"type"`
 	Data      interface{} `json:"data"`
 	Timestamp time.Time   `json:"timestamp"`
 }

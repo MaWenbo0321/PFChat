@@ -28,7 +28,7 @@ export const useChatStore = defineStore('chat', () => {
         currentChatUser.value = user
     }
 
-    // 别名方法 - 为了兼容性
+    // 别名方法
     const selectUser = (user) => {
         currentChatUser.value = user
     }
@@ -47,7 +47,11 @@ export const useChatStore = defineStore('chat', () => {
         if (!messages.value[userId]) {
             messages.value[userId] = []
         }
-        messages.value[userId].push(message)
+        // 避免重复
+        const exists = messages.value[userId].some(m => m.id === message.id)
+        if (!exists) {
+            messages.value[userId].push(message)
+        }
     }
 
     const removeMessage = (messageId) => {
@@ -78,14 +82,14 @@ export const useChatStore = defineStore('chat', () => {
         users,
         messages,
         currentChatUser,
-        currentUser, // 添加别名
+        currentUser,
         currentMessages,
         ws,
         connected,
-        isConnected, // 添加别名
+        isConnected,
         setUsers,
         setCurrentChatUser,
-        selectUser, // 添加别名方法
+        selectUser,
         setCurrentMessages,
         setMessages,
         addMessage,

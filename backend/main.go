@@ -51,23 +51,29 @@ func main() {
 			auth.DELETE("/messages/clear/:userId", clearChatHistory)
 			auth.DELETE("/messages/mine/:userId", deleteMyMessages)
 
-			// 语法错误记录（扩展功能）
-			auth.GET("/grammar-errors", getGrammarErrors)                        // 获取错误记录(支持按类型筛选)
-			auth.DELETE("/grammar-errors/:id", deleteGrammarError)               // 删除单条记录
-			auth.POST("/grammar-errors/batch-delete", batchDeleteGrammarErrors)  // 批量删除
-			auth.DELETE("/grammar-errors/clear/:type", clearGrammarErrorsByType) // 按类型清空
-			auth.PUT("/grammar-errors/:id/type", updateGrammarErrorType)         // 更新错误类型
+			// 🆕 实时检测接口 (Grammarly 风格)
+			auth.POST("/messages/realtime-check", realtimeCheck)
+
+			// 🆕 获取消息关联的语用错误 (接收方使用)
+			auth.POST("/messages/errors", getMessageErrorsByIds)
+
+			// 🆕 AI Chat 接口
+			auth.POST("/ai/chat", aiChat)
+
+			// 语法错误记录
+			auth.GET("/grammar-errors", getGrammarErrors)
+			auth.DELETE("/grammar-errors/:id", deleteGrammarError)
+			auth.POST("/grammar-errors/batch-delete", batchDeleteGrammarErrors)
+			auth.DELETE("/grammar-errors/clear/:type", clearGrammarErrorsByType)
+			auth.PUT("/grammar-errors/:id/type", updateGrammarErrorType)
 
 			// 管理员专用路由
 			admin := auth.Group("/admin")
 			admin.Use(adminMiddleware())
 			{
-				// 用户管理
 				admin.GET("/users", getAllUsersForAdmin)
 				admin.DELETE("/users/:id", deleteUser)
 				admin.PUT("/users/:id/role", updateUserRole)
-
-				// 系统统计
 				admin.GET("/stats", getUserStats)
 			}
 		}
@@ -90,22 +96,18 @@ func initDB() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	// 自动迁移
-	db.AutoMigrate(&User{}, &Message{}, &GrammarError{})
+	// 自动迁移 - 🆕 新增 AIChatHistory
+	db.AutoMigrate(&User{}, &Message{}, &GrammarError{}, &AIChatHistory{})
 
-	// 创建默认管理员账号（如果不存在）
+	// 创建默认管理员账号
 	createDefaultAdmin()
 
 	log.Println("Database connected and migrated")
 }
 
-// 创建默认管理员账号
 func createDefaultAdmin() {
 	var adminUser User
-
-	// 检查是否已存在管理员账号
 	if err := db.Where("role = ?", RoleAdmin).First(&adminUser).Error; err != nil {
-		// 不存在管理员，创建默认管理员
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123456"), bcrypt.DefaultCost)
 		if err != nil {
 			log.Printf("Failed to hash admin password: %v", err)
@@ -123,32 +125,31 @@ func createDefaultAdmin() {
 			log.Printf("Failed to create default admin: %v", err)
 		} else {
 			log.Println("Default admin account created - Username: admin, Password: admin123456")
-			log.Println("⚠️  Please change the default admin password after first login!")
 		}
 	}
 }
 
 // CORS 中间件
 func corsMiddleware() gin.HandlerFunc {
-    return func(c *gin.Context) {
-        // 🔧 在生产环境中，应该指定具体的源
-        origin := c.GetHeader("Origin")
-        if origin != "" {
-            c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-        } else {
-            c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-        }
-        
-        c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Upgrade, Connection")
-        c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+	return func(c *gin.Context) {
+		// 🔧 在生产环境中，应该指定具体的源
+		origin := c.GetHeader("Origin")
+		if origin != "" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		}
 
-        // 处理预检请求
-        if c.Request.Method == "OPTIONS" {
-            c.AbortWithStatus(204)
-            return
-        }
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Upgrade, Connection")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 
-        c.Next()
-    }
+		// 处理预检请求
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
 }

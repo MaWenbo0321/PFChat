@@ -42,8 +42,8 @@ type DashScopeParameters struct {
 // DashScope 响应结构
 type DashScopeResponse struct {
 	Output struct {
-		Text   string `json:"text,omitempty"`
-		Finish string `json:"finish_reason,omitempty"`
+		Text    string `json:"text,omitempty"`
+		Finish  string `json:"finish_reason,omitempty"`
 		Choices []struct {
 			Message struct {
 				Role    string `json:"role"`
@@ -68,7 +68,7 @@ type GrammarCheckResponse struct {
 	ErrorType   string `json:"error_type"`
 }
 
-// 执行语用失误检查
+// 执行语用失误检查 (异步, 用于消息发送后)
 func checkGrammar(userID uint, message Message) {
 	var sender, receiver User
 	db.First(&sender, message.SenderID)
@@ -80,7 +80,6 @@ func checkGrammar(userID uint, message Message) {
 		message.SenderID, message.ReceiverID, message.ReceiverID, message.SenderID, message.ID,
 	).Order("created_at DESC").Limit(10).Preload("Sender").Preload("Receiver").Find(&historyMessages)
 
-	// 🔧 修改：合并 system 和 user prompt
 	prompt := buildCombinedPrompt(historyMessages, message, sender, receiver)
 
 	result, err := callDashScopeAPI(prompt)
@@ -109,15 +108,18 @@ func checkGrammar(userID uint, message Message) {
 			return
 		}
 
+		// 🆕 通知发送方
 		notifyUser(userID, grammarError)
+
+		// 🆕 通知接收方 (用新的类型, 前端不弹窗)
+		notifyReceiver(message.ReceiverID, message.ID, grammarError)
 	}
 }
 
-// 🔧 修改：构建合并的提示词（不使用 system 角色）
+// buildCombinedPrompt 构建合并的提示词
 func buildCombinedPrompt(history []Message, current Message, sender User, receiver User) string {
 	var sb strings.Builder
 
-	// 将系统提示合并到用户消息中
 	sb.WriteString("你是一个语言学家，根据对话双方的聊天历史及其文化背景检查用户当前输入的语言是否有语用失误。\n")
 	sb.WriteString("如果有语用失误，请根据Thomas的定义，判断该失误属于语言语用失误还是社会语用失误。\n\n")
 
@@ -129,7 +131,13 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 	sb.WriteString("   - 违反社会文化规范，如不了解对方文化的禁忌、礼节、价值观等\n")
 	sb.WriteString("   - 例如：话题不当、称呼不当、忽视文化差异、违反社交距离等\n\n")
 
-	// 添加对话历史
+	// 判断标准
+	sb.WriteString("判断标准:\n")
+	sb.WriteString("- 只标记明显的、可能导致严重误解或冒犯的语用失误\n")
+	sb.WriteString("- 如果不确定是否为语用失误, 倾向于判定为没有失误\n")
+	sb.WriteString("- 正常的文化表达变体不应被标记为错误\n\n")
+
+	// 对话历史
 	if len(history) > 0 {
 		sb.WriteString("对话历史:\n")
 		for i := len(history) - 1; i >= 0; i-- {
@@ -143,7 +151,7 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("\n")
 	}
 
-	// 添加对话双方的文化背景
+	// 对话双方信息
 	sb.WriteString("对话双方的文化背景:\n")
 	sb.WriteString(fmt.Sprintf("- 发送者: %s, 国家: %s\n", sender.Username, getCountryName(sender.Country)))
 	sb.WriteString(fmt.Sprintf("- 接收者: %s, 国家: %s\n\n", receiver.Username, getCountryName(receiver.Country)))
@@ -166,14 +174,52 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 	return sb.String()
 }
 
-// 🔧 修改：调用 DashScope API（只使用 user 角色）
+// makeDashScopeRequest 发起 DashScope API 请求 (可复用)
+func makeDashScopeRequest(apiKey string, reqBody DashScopeRequest) (*DashScopeResponse, error) {
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("JSON 序列化失败: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", dashScopeAPIURL, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("API 请求失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API 返回错误 %d: %s", resp.StatusCode, string(body))
+	}
+
+	var dashResp DashScopeResponse
+	if err := json.Unmarshal(body, &dashResp); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %v", err)
+	}
+
+	return &dashResp, nil
+}
+
+// callDashScopeAPI 调用 DashScope API 进行语用检查
 func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
 	apiKey := "sk-8ab77da79b894ba6beb61c9190c74602"
 	if apiKey == "" {
 		return nil, fmt.Errorf("DASHSCOPE_API_KEY 环境变量未设置")
 	}
 
-	// 🔧 只使用 user 角色
 	reqBody := DashScopeRequest{
 		Model: defaultModel,
 		Input: DashScopeInput{
@@ -186,72 +232,33 @@ func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
 		},
 		Parameters: DashScopeParameters{
 			ResultFormat: "message",
-			Temperature:  0.7,
-			MaxTokens:    1500,
+			Temperature:  0.3,
+			MaxTokens:    512,
 		},
 	}
 
-	jsonData, err := json.Marshal(reqBody)
+	dashResp, err := makeDashScopeRequest(apiKey, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request failed: %v", err)
+		return nil, err
 	}
 
-	log.Printf("模型: %s", defaultModel)
-	log.Printf("Prompt 长度: %d 字符", len(prompt))
-
-	req, err := http.NewRequest("POST", dashScopeAPIURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, fmt.Errorf("create request failed: %v", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	log.Printf("发送请求到 DashScope...")
-	client := &http.Client{Timeout: 30 * time.Second}
-	startTime := time.Now()
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	log.Printf("响应时间: %v", time.Since(startTime))
-	log.Printf("状态码: %d", resp.StatusCode)
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body failed: %v", err)
-	}
-
-	log.Printf("原始响应: %s", string(body))
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API返回状态码 %d: %s", resp.StatusCode, string(body))
-	}
-
-	var dashScopeResp DashScopeResponse
-	if err := json.Unmarshal(body, &dashScopeResp); err != nil {
-		return nil, fmt.Errorf("unmarshal response failed: %v", err)
-	}
-
+	// 提取响应文本
 	var responseText string
-	if len(dashScopeResp.Output.Choices) > 0 {
-		responseText = dashScopeResp.Output.Choices[0].Message.Content
-	} else if dashScopeResp.Output.Text != "" {
-		responseText = dashScopeResp.Output.Text
+	if len(dashResp.Output.Choices) > 0 {
+		responseText = dashResp.Output.Choices[0].Message.Content
+	} else if dashResp.Output.Text != "" {
+		responseText = dashResp.Output.Text
 	} else {
-		return nil, fmt.Errorf("empty response from API")
+		return &GrammarCheckResponse{HasError: false}, nil
 	}
 
-	log.Printf("LLM 返回内容: %s", responseText)
+	// 提取 JSON
+	jsonStr := extractJSON(responseText)
+	log.Printf("LLM Response JSON: %s", jsonStr)
 
-	jsonText := extractJSON(responseText)
 	var result GrammarCheckResponse
-
-	if err := json.Unmarshal([]byte(jsonText), &result); err != nil {
-		log.Printf("JSON 解析失败: %v, 尝试文本解析...", err)
-		// 如果 JSON 解析失败，返回无错误
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		log.Printf("JSON parse error: %v, raw: %s", err, jsonStr)
 		return &GrammarCheckResponse{HasError: false}, nil
 	}
 
@@ -315,6 +322,7 @@ func getCountryName(countryCode string) string {
 	return countryCode
 }
 
+// notifyUser 通知发送方 (通过 WebSocket)
 func notifyUser(userID uint, grammarError GrammarError) {
 	wsMsg := WSMessage{
 		Type: "grammar_check",
@@ -335,6 +343,30 @@ func notifyUser(userID uint, grammarError GrammarError) {
 
 	if globalHub != nil {
 		globalHub.sendToUser(userID, msgBytes)
+	}
+}
+
+// 🆕 notifyReceiver 通知接收方有语用错误 (不弹窗, 只刷新标识)
+func notifyReceiver(receiverID uint, messageID uint, grammarError GrammarError) {
+	wsMsg := WSMessage{
+		Type: "receiver_error_notify",
+		Data: map[string]interface{}{
+			"message_id":  messageID,
+			"error_type":  grammarError.ErrorType,
+			"suggestion":  grammarError.LLMSuggestion,
+			"explanation": grammarError.LLMExplanation,
+		},
+		Timestamp: time.Now(),
+	}
+
+	msgBytes, err := json.Marshal(wsMsg)
+	if err != nil {
+		log.Printf("Marshal receiver notify error: %v", err)
+		return
+	}
+
+	if globalHub != nil {
+		globalHub.sendToUser(receiverID, msgBytes)
 	}
 }
 

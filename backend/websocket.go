@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,7 +16,7 @@ const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 512
+	maxMessageSize = 4096 // 增加消息大小限制
 )
 
 var upgrader = websocket.Upgrader{
@@ -28,10 +29,12 @@ var upgrader = websocket.Upgrader{
 
 // Client WebSocket 客户端
 type Client struct {
-	hub    *Hub
-	conn   *websocket.Conn
-	send   chan []byte
-	userID uint
+	hub      *Hub
+	conn     *websocket.Conn
+	send     chan []byte
+	userID   uint
+	mu       sync.Mutex // 添加互斥锁保护连接写入
+	isClosed bool
 }
 
 // Hub 管理所有客户端
@@ -40,6 +43,7 @@ type Hub struct {
 	broadcast  chan []byte
 	register   chan *Client
 	unregister chan *Client
+	mu         sync.RWMutex // 添加读写锁
 }
 
 func newHub() *Hub {
@@ -55,38 +59,72 @@ func (h *Hub) run() {
 	for {
 		select {
 		case client := <-h.register:
+			h.mu.Lock()
+			// 如果用户已存在连接，先关闭旧连接
+			if oldClient, ok := h.clients[client.userID]; ok {
+				oldClient.closeConnection()
+				delete(h.clients, client.userID)
+			}
 			h.clients[client.userID] = client
-			log.Printf("User %d connected", client.userID)
+			h.mu.Unlock()
+			log.Printf("User %d connected, total clients: %d", client.userID, len(h.clients))
 
 		case client := <-h.unregister:
-			if _, ok := h.clients[client.userID]; ok {
-				delete(h.clients, client.userID)
-				close(client.send)
-				log.Printf("User %d disconnected", client.userID)
+			h.mu.Lock()
+			if existingClient, ok := h.clients[client.userID]; ok {
+				// 只有当是同一个客户端时才删除
+				if existingClient == client {
+					delete(h.clients, client.userID)
+					client.closeConnection()
+					log.Printf("User %d disconnected, total clients: %d", client.userID, len(h.clients))
+				}
 			}
+			h.mu.Unlock()
 
 		case message := <-h.broadcast:
+			h.mu.RLock()
 			for _, client := range h.clients {
 				select {
 				case client.send <- message:
 				default:
-					close(client.send)
-					delete(h.clients, client.userID)
+					go func(c *Client) {
+						h.unregister <- c
+					}(client)
 				}
 			}
+			h.mu.RUnlock()
 		}
+	}
+}
+
+// 关闭客户端连接
+func (c *Client) closeConnection() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.isClosed {
+		c.isClosed = true
+		close(c.send)
 	}
 }
 
 // 发送消息给特定用户
 func (h *Hub) sendToUser(userID uint, message []byte) {
-	if client, ok := h.clients[userID]; ok {
+	h.mu.RLock()
+	client, ok := h.clients[userID]
+	h.mu.RUnlock()
+
+	if ok {
 		select {
 		case client.send <- message:
+			log.Printf("Message sent to user %d", userID)
 		default:
-			close(client.send)
-			delete(h.clients, userID)
+			log.Printf("Failed to send message to user %d, channel full", userID)
+			go func() {
+				h.unregister <- client
+			}()
 		}
+	} else {
+		log.Printf("User %d not connected", userID)
 	}
 }
 
@@ -118,10 +156,11 @@ func serveWs(hub *Hub, c *gin.Context) {
 	}
 
 	client := &Client{
-		hub:    hub,
-		conn:   conn,
-		send:   make(chan []byte, 256),
-		userID: claims.UserID,
+		hub:      hub,
+		conn:     conn,
+		send:     make(chan []byte, 256),
+		userID:   claims.UserID,
+		isClosed: false,
 	}
 
 	client.hub.register <- client
@@ -138,6 +177,7 @@ func (c *Client) readPump() {
 		c.conn.Close()
 	}()
 
+	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -148,7 +188,7 @@ func (c *Client) readPump() {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("WebSocket error: %v", err)
+				log.Printf("WebSocket error for user %d: %v", c.userID, err)
 			}
 			break
 		}
@@ -169,27 +209,43 @@ func (c *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-c.send:
+			c.mu.Lock()
+			if c.isClosed {
+				c.mu.Unlock()
+				return
+			}
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				c.mu.Unlock()
 				return
 			}
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
+				c.mu.Unlock()
 				return
 			}
 			w.Write(message)
 
 			if err := w.Close(); err != nil {
+				c.mu.Unlock()
 				return
 			}
+			c.mu.Unlock()
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			c.mu.Lock()
+			if c.isClosed {
+				c.mu.Unlock()
 				return
 			}
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				c.mu.Unlock()
+				return
+			}
+			c.mu.Unlock()
 		}
 	}
 }
@@ -206,5 +262,8 @@ func (c *Client) handleMessage(message []byte) {
 	case "message":
 		// 处理聊天消息
 		handleChatMessage(c, wsMsg.Data)
+	case "ping":
+		// 处理心跳
+		log.Printf("Received ping from user %d", c.userID)
 	}
 }

@@ -74,7 +74,7 @@ func getMessages(c *gin.Context) {
 type SendMessageRequest struct {
 	ReceiverID    uint   `json:"receiver_id" binding:"required"`
 	Content       string `json:"content" binding:"required"`
-	ErrorRecordID uint   `json:"error_record_id"` // 🔧 新增：关联的错误记录ID
+	ErrorRecordID uint   `json:"error_record_id"` // 关联的错误记录ID
 }
 
 // HTTP 发送消息接口
@@ -99,6 +99,7 @@ func sendMessage(c *gin.Context) {
 		SenderID:   senderID,
 		ReceiverID: req.ReceiverID,
 		Content:    req.Content,
+		CreatedAt:  time.Now(),
 	}
 
 	if err := db.Create(&message).Error; err != nil {
@@ -109,16 +110,18 @@ func sendMessage(c *gin.Context) {
 	// 预加载关联数据
 	db.Preload("Sender").Preload("Receiver").First(&message, message.ID)
 
-	// 🔧 如果有关联的错误记录ID，更新该记录的 message_id
+	// 如果有关联的错误记录ID，更新该记录的 message_id
+	var hasError bool = false
+	var errorRecord GrammarError
 	if req.ErrorRecordID > 0 {
-		var grammarError GrammarError
-		if err := db.First(&grammarError, req.ErrorRecordID).Error; err == nil {
+		if err := db.First(&errorRecord, req.ErrorRecordID).Error; err == nil {
 			// 验证该错误记录属于当前用户
-			if grammarError.UserID == senderID {
-				grammarError.MessageID = message.ID
-				if err := db.Save(&grammarError).Error; err != nil {
+			if errorRecord.UserID == senderID {
+				errorRecord.MessageID = message.ID
+				if err := db.Save(&errorRecord).Error; err != nil {
 					log.Printf("更新错误记录的 message_id 失败: %v", err)
 				} else {
+					hasError = true
 					log.Printf("已更新错误记录 %d 的 message_id 为 %d", req.ErrorRecordID, message.ID)
 				}
 			}
@@ -134,12 +137,67 @@ func sendMessage(c *gin.Context) {
 
 	msgBytes, _ := json.Marshal(wsMsg)
 	if globalHub != nil {
+		// 发送给接收者
 		globalHub.sendToUser(req.ReceiverID, msgBytes)
-		// 同时发送给发送者（用于多设备同步）
+		// 同时发送给发送者（用于多设备同步和实时显示）
 		globalHub.sendToUser(senderID, msgBytes)
 	}
 
+	// 如果消息有语用失误，给接收方发送解释通知
+	if hasError && errorRecord.LLMExplanation != "" {
+		go sendPragmaticExplanationToReceiver(senderID, req.ReceiverID, message, errorRecord)
+	}
+
 	c.JSON(http.StatusOK, message)
+}
+
+// 给接收方发送语用失误解释
+func sendPragmaticExplanationToReceiver(senderID, receiverID uint, message Message, errorRecord GrammarError) {
+	var sender User
+	db.First(&sender, senderID)
+
+	// 构建解释消息
+	explanation := buildReceiverExplanation(sender, message.Content, errorRecord)
+
+	// 发送 WebSocket 通知给接收方
+	wsMsg := WSMessage{
+		Type: "pragmatic_explanation",
+		Data: map[string]interface{}{
+			"message_id":   message.ID,
+			"sender_name":  sender.Username,
+			"sender_country": sender.Country,
+			"original_text": message.Content,
+			"error_type":   errorRecord.ErrorType,
+			"explanation":  explanation,
+			"suggestion":   errorRecord.LLMSuggestion,
+		},
+		Timestamp: time.Now(),
+	}
+
+	msgBytes, err := json.Marshal(wsMsg)
+	if err != nil {
+		log.Printf("Marshal pragmatic explanation error: %v", err)
+		return
+	}
+
+	if globalHub != nil {
+		globalHub.sendToUser(receiverID, msgBytes)
+		log.Printf("已发送语用失误解释给用户 %d", receiverID)
+	}
+}
+
+// 构建给接收方的解释内容
+func buildReceiverExplanation(sender User, content string, errorRecord GrammarError) string {
+	// 可以调用 LLM 生成更详细的解释，这里先使用预设模板
+	countryName := getCountryName(sender.Country)
+	
+	if errorRecord.ErrorType == ErrorTypeSociopragmatic {
+		return "这位来自" + countryName + "的用户可能因为文化背景差异，在表达上有些不同。" +
+			"原因说明: " + errorRecord.LLMExplanation
+	}
+	
+	return "这位来自" + countryName + "的用户在语言表达上可能存在一些差异。" +
+		"原因说明: " + errorRecord.LLMExplanation
 }
 
 // WebSocket 消息处理
@@ -177,6 +235,8 @@ func handleChatMessage(client *Client, data interface{}) {
 
 	msgBytes, _ := json.Marshal(wsMsg)
 	client.hub.sendToUser(receiverID, msgBytes)
+	// 同时发送给发送者
+	client.hub.sendToUser(client.userID, msgBytes)
 
 	// 异步语法检查
 	go checkGrammar(client.userID, message)
@@ -295,6 +355,7 @@ type GrammarErrorStatistics struct {
 }
 
 // 获取当前用户的语法错误记录（支持按类型筛选）
+// 只返回已发送的消息的错误记录（message_id > 0）
 func getGrammarErrors(c *gin.Context) {
 	userID := getCurrentUserID(c)
 
@@ -304,8 +365,8 @@ func getGrammarErrors(c *gin.Context) {
 		return
 	}
 
-	// 构建查询
-	query := db.Where("user_id = ?", userID)
+	// 构建查询 - 只查询已关联消息的错误记录
+	query := db.Where("user_id = ? AND message_id > 0", userID)
 
 	// 按错误类型筛选
 	if req.ErrorType != "" && req.ErrorType != "all" {
@@ -319,7 +380,7 @@ func getGrammarErrors(c *gin.Context) {
 		return
 	}
 
-	// 获取统计信息
+	// 获取统计信息（只统计已发送消息的错误）
 	statistics := getGrammarErrorStatistics(userID)
 
 	c.JSON(http.StatusOK, GetGrammarErrorsResponse{
@@ -328,12 +389,12 @@ func getGrammarErrors(c *gin.Context) {
 	})
 }
 
-// 获取语法错误统计信息
+// 获取语法错误统计信息（只统计已发送消息的错误）
 func getGrammarErrorStatistics(userID uint) GrammarErrorStatistics {
 	var statistics GrammarErrorStatistics
 
-	// 总数
-	db.Model(&GrammarError{}).Where("user_id = ?", userID).Count(&statistics.Total)
+	// 总数 - 只统计已关联消息的错误
+	db.Model(&GrammarError{}).Where("user_id = ? AND message_id > 0", userID).Count(&statistics.Total)
 
 	// 按类型统计
 	statistics.ByType = make(map[string]int)
@@ -343,7 +404,7 @@ func getGrammarErrorStatistics(userID uint) GrammarErrorStatistics {
 	}
 	db.Model(&GrammarError{}).
 		Select("error_type, COUNT(*) as count").
-		Where("user_id = ?", userID).
+		Where("user_id = ? AND message_id > 0", userID).
 		Group("error_type").
 		Scan(&typeStats)
 
@@ -353,12 +414,12 @@ func getGrammarErrorStatistics(userID uint) GrammarErrorStatistics {
 
 	// 今日错误数
 	db.Model(&GrammarError{}).
-		Where("user_id = ? AND DATE(created_at) = CURDATE()", userID).
+		Where("user_id = ? AND message_id > 0 AND DATE(created_at) = CURDATE()", userID).
 		Count(&statistics.TodayCount)
 
 	// 本周错误数
 	db.Model(&GrammarError{}).
-		Where("user_id = ? AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)", userID).
+		Where("user_id = ? AND message_id > 0 AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)", userID).
 		Count(&statistics.WeekCount)
 
 	return statistics
@@ -417,8 +478,8 @@ func clearGrammarErrorsByType(c *gin.Context) {
 	errorType := c.Param("type")
 
 	if errorType == "" || errorType == "all" {
-		// 清空所有记录
-		result := db.Where("user_id = ?", userID).Delete(&GrammarError{})
+		// 清空所有已发送消息的错误记录
+		result := db.Where("user_id = ? AND message_id > 0", userID).Delete(&GrammarError{})
 		if result.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "清空失败"})
 			return
@@ -429,7 +490,7 @@ func clearGrammarErrorsByType(c *gin.Context) {
 		})
 	} else {
 		// 清空指定类型的记录
-		result := db.Where("user_id = ? AND error_type = ?", userID, errorType).Delete(&GrammarError{})
+		result := db.Where("user_id = ? AND error_type = ? AND message_id > 0", userID, errorType).Delete(&GrammarError{})
 		if result.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "清空失败"})
 			return
@@ -455,7 +516,7 @@ func updateGrammarErrorType(c *gin.Context) {
 		return
 	}
 
-	// 🔧 验证错误类型 - 使用新的常量
+	// 验证错误类型 - 使用新的常量
 	if req.ErrorType != ErrorTypePragmalinguistic && req.ErrorType != ErrorTypeSociopragmatic {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的错误类型"})
 		return
@@ -630,8 +691,8 @@ func getUserStats(c *gin.Context) {
 	// 统计消息总数
 	db.Model(&Message{}).Count(&stats.TotalMessages)
 
-	// 统计语法错误总数
-	db.Model(&GrammarError{}).Count(&stats.TotalGrammarErrors)
+	// 统计语法错误总数（只统计已发送消息的错误）
+	db.Model(&GrammarError{}).Where("message_id > 0").Count(&stats.TotalGrammarErrors)
 
 	c.JSON(http.StatusOK, stats)
 }
