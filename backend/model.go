@@ -35,7 +35,6 @@ type Message struct {
 	SenderID   uint      `json:"sender_id" gorm:"not null;index"`
 	ReceiverID uint      `json:"receiver_id" gorm:"not null;index"`
 	Content    string    `json:"content" gorm:"type:text;not null"`
-	IsRead     bool      `json:"is_read" gorm:"default:false"`
 	CreatedAt  time.Time `json:"created_at"`
 
 	// 关联

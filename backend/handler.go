@@ -60,11 +60,6 @@ func getMessages(c *gin.Context) {
 		return
 	}
 
-	// 标记消息为已读
-	db.Model(&Message{}).Where(
-		"sender_id = ? AND receiver_id = ? AND is_read = ?",
-		otherUserID, currentUserID, false,
-	).Update("is_read", true)
 
 	c.JSON(http.StatusOK, messages)
 }

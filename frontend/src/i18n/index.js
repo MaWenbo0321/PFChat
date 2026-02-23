@@ -42,6 +42,23 @@ const zhCN = {
 
     // 聊天界面
     chat: {
+        // 实时检测相关
+        checking: '检测中...',
+        errorsFound: '发现 {count} 个问题',
+        noErrors: '未发现问题',
+        sendWithErrorsConfirm: '你的消息中检测到了语用失误，确定要发送吗？',
+        sendAnyway: '仍然发送',
+
+        // AI Chat 相关
+        aiAssistant: 'AI 助手',
+        aiWelcome: '向我提问跨文化沟通、语用差异相关的问题，或获取消息修改建议。',
+        aiInputPlaceholder: '询问文化或语用相关问题...',
+        aiThinking: '思考中...',
+        aiError: '抱歉，出现了错误，请重试。',
+        aiSuggest1: '中英文化交际中常见的语用失误有哪些？',
+        aiSuggest2: '不同文化中如何礼貌地拒绝邀请？',
+        aiSuggest3: '解释语言语用失误和社会语用失误的区别',
+
         // 🔧 添加发送前检测相关文本
         errorDetectedTitle: '检测到语用失误',
         errorDetected: '您的消息可能存在语用失误',
@@ -56,7 +73,6 @@ const zhCN = {
         sendEdited: '发送修改',
         checkFailed: '检测失败',
         sendConfirmTitle: '发送确认',
-        sendAnyway: '仍要发送',
         sendCancelled: '已取消发送',
         sendSuccess: '发送成功',
         pragmalinguisticError: '语言语用失误',
@@ -163,26 +179,6 @@ const zhCN = {
         info: '提示'
     },
 
-// 在 zh.chat 中添加:
-    zhChatAdditions: {
-        // 实时检测相关
-        checking: '检测中...',
-        errorsFound: '发现 {count} 个问题',
-        noErrors: '未发现问题',
-        sendWithErrorsConfirm: '你的消息中检测到了语用失误，确定要发送吗？',
-        sendAnyway: '仍然发送',
-
-        // AI Chat 相关
-        aiAssistant: 'AI 助手',
-        aiWelcome: '向我提问跨文化沟通、语用差异相关的问题，或获取消息修改建议。',
-        aiInputPlaceholder: '询问文化或语用相关问题...',
-        aiThinking: '思考中...',
-        aiError: '抱歉，出现了错误，请重试。',
-        aiSuggest1: '中英文化交际中常见的语用失误有哪些？',
-        aiSuggest2: '不同文化中如何礼貌地拒绝邀请？',
-        aiSuggest3: '解释语言语用失误和社会语用失误的区别',
-    },
-
 
 }
 
@@ -224,6 +220,25 @@ const enUS = {
     },
 
     chat: {
+        // 实时检测相关
+        checking: 'Checking...',
+        errorsFound: '{count} issue(s) found',
+        noErrors: 'No issues found',
+        sendWithErrorsConfirm: 'Pragmatic errors have been detected in your message. Are you sure you want to send it?',
+        sendAnyway: 'Send Anyway',
+
+        // AI Chat 相关
+        aiAssistant: 'AI Assistant',
+        aiWelcome: 'Ask me about cross-cultural communication, pragmatic differences, or get help with your messages.',
+        aiInputPlaceholder: 'Ask about culture or pragmatics...',
+        aiThinking: 'Thinking...',
+        aiError: 'Sorry, there was an error. Please try again.',
+        aiSuggest1: 'What are common pragmatic errors between Chinese and English speakers?',
+        aiSuggest2: 'How to politely decline an invitation in different cultures?',
+        aiSuggest3: 'Explain the difference between pragmalinguistic and sociopragmatic failure',
+
+        // 保留原有的 key 不变
+
         errorDetectedTitle: 'Pragmatic Error Detected',
 
         editMessage: 'Edit Message',
@@ -239,7 +254,6 @@ const enUS = {
         suggestion: 'Suggested Revision',
         explanation: 'Explanation',
         sendConfirmTitle: 'Send Confirmation',
-        sendAnyway: 'Send Anyway',
         sendCancelled: 'Send Cancelled',
         sendSuccess: 'Sent Successfully',
         pragmalinguisticError: 'Pragmalinguistic Failure',
@@ -345,27 +359,7 @@ const enUS = {
         warning: 'Warning',
         info: 'Info'
     },
-    // 在 en.chat 中添加:
-    enChatAdditions : {
-        // 实时检测相关
-        checking: 'Checking...',
-        errorsFound: '{count} issue(s) found',
-        noErrors: 'No issues found',
-        sendWithErrorsConfirm: 'Pragmatic errors have been detected in your message. Are you sure you want to send it?',
-        sendAnyway: 'Send Anyway',
 
-        // AI Chat 相关
-        aiAssistant: 'AI Assistant',
-        aiWelcome: 'Ask me about cross-cultural communication, pragmatic differences, or get help with your messages.',
-        aiInputPlaceholder: 'Ask about culture or pragmatics...',
-        aiThinking: 'Thinking...',
-        aiError: 'Sorry, there was an error. Please try again.',
-        aiSuggest1: 'What are common pragmatic errors between Chinese and English speakers?',
-        aiSuggest2: 'How to politely decline an invitation in different cultures?',
-        aiSuggest3: 'Explain the difference between pragmalinguistic and sociopragmatic failure',
-
-        // 保留原有的 key 不变
-    },
 }
 
 // 创建 i18n 实例

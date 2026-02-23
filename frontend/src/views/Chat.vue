@@ -1052,6 +1052,18 @@ const formatMessageTime = (timestamp) => {
   flex-direction: column;
   gap: 8px;
   margin-top: 16px;
+  width: 100%;
+}
+
+/* 让 suggestion 按钮文字自动换行、边框随内容伸缩 */
+.ai-suggestions .el-button {
+  white-space: normal !important;
+  word-break: break-word;
+  height: auto !important;
+  line-height: 1.5 !important;
+  padding: 8px 14px !important;
+  width: 100%;
+  text-align: center;
 }
 .ai-message-wrapper {
   margin-bottom: 12px;
