@@ -1,9 +1,7 @@
 import { createI18n } from 'vue-i18n'
 
 // 中文语言包
-
 const zhCN = {
-    // 登录注册
     login: {
         title: '即时通讯系统',
         loginTab: '登录',
@@ -27,7 +25,6 @@ const zhCN = {
         privacyNotice: '注册即表示同意数据用于实验目的'
     },
 
-    // 隐私声明
     privacy: {
         title: '隐私声明',
         agree: '同意',
@@ -40,26 +37,7 @@ const zhCN = {
         agreement: '点击"同意"即表示您已了解并同意以上内容。感谢您的支持与配合!'
     },
 
-    // 聊天界面
     chat: {
-        // 实时检测相关
-        checking: '检测中...',
-        errorsFound: '发现 {count} 个问题',
-        noErrors: '未发现问题',
-        sendWithErrorsConfirm: '你的消息中检测到了语用失误，确定要发送吗？',
-        sendAnyway: '仍然发送',
-
-        // AI Chat 相关
-        aiAssistant: 'AI 助手',
-        aiWelcome: '向我提问跨文化沟通、语用差异相关的问题，或获取消息修改建议。',
-        aiInputPlaceholder: '询问文化或语用相关问题...',
-        aiThinking: '思考中...',
-        aiError: '抱歉，出现了错误，请重试。',
-        aiSuggest1: '中英文化交际中常见的语用失误有哪些？',
-        aiSuggest2: '不同文化中如何礼貌地拒绝邀请？',
-        aiSuggest3: '解释语言语用失误和社会语用失误的区别',
-
-        // 🔧 添加发送前检测相关文本
         errorDetectedTitle: '检测到语用失误',
         errorDetected: '您的消息可能存在语用失误',
         errorType: '错误类型',
@@ -73,9 +51,10 @@ const zhCN = {
         sendEdited: '发送修改',
         checkFailed: '检测失败',
         sendConfirmTitle: '发送确认',
+        sendAnyway: '仍要发送',
         sendCancelled: '已取消发送',
         sendSuccess: '发送成功',
-        pragmalinguisticError: '语言语用失误',
+        pragmalinguisticError: '语用语言失误',
         sociopragmaticError: '社会语用失误',
         searchUser: '搜索用户',
         connected: '已连接',
@@ -106,22 +85,49 @@ const zhCN = {
         messagesDeleted: '已删除 {count} 条消息',
         sendFailed: '发送失败',
         justNow: '刚刚',
-        minutesAgo: '{n}分钟前'
+        minutesAgo: '{n}分钟前',
+        // 实时检测相关
+        checking: '检测中...',
+        errorsFound: '发现 {count} 个问题',
+        noErrors: '未发现问题',
+        sendWithErrorsConfirm: '您的消息检测到语用问题，确定要发送吗？',
+        // AI Chat 相关
+        aiAssistant: 'AI 助手',
+        aiWelcome: '您可以问我关于跨文化沟通、语用差异等问题，或者让我帮您改进消息。',
+        aiInputPlaceholder: '询问文化或语用问题...',
+        aiThinking: '思考中...',
+        aiError: '抱歉，出现错误，请重试。',
+        aiSuggest1: '中英文使用者之间常见的语用错误有哪些？',
+        aiSuggest2: '在不同文化中如何礼貌地拒绝邀请？',
+        aiSuggest3: '解释语用语言失误和社会语用失误的区别',
     },
 
-    // 语法错误
+    // 语法错误 - 更新为5种分类
     grammar: {
-        title: '语法错误记录',
+        title: '语用错误记录',
         back: '返回',
         clearAll: '清空全部',
         clearType: '清空当前分类',
         search: '搜索错误内容',
         typeFilter: '错误类型',
         allTypes: '全部类型',
-        errorType1: '语言语用失误',
+        // 5种错误类型
+        errorType1: '语用语言失误',
         errorType2: '社会语用失误',
-        type1Count: '语言语用失误数量',
+        errorType3: '严重语用语言失误',
+        errorType4: '严重社会语用失误',
+        errorType5: '语用语言失误和社会语用失误',
+        // 统计标签
+        totalErrors: '总错误数',
+        weekErrors: '本周错误',
+        todayErrors: '今日错误',
+        type1Count: '语用语言失误数量',
         type2Count: '社会语用失误数量',
+        type3Count: '严重语用语言失误数量',
+        type4Count: '严重社会语用失误数量',
+        type5Count: '双重失误数量',
+        improvableCount: '可改进',
+        problematicCount: '严重问题',
         noErrors: '暂无错误记录',
         originalText: '原始文本',
         suggestion: '建议修改',
@@ -139,33 +145,33 @@ const zhCN = {
         copyFailed: '复制失败',
         messageDeleted: '原始消息已删除',
         updateTypeSuccess: '类型更新成功',
-        updateTypeFailed: '类型更新失败'
+        updateTypeFailed: '类型更新失败',
+        // 严重程度标签
+        severityImprovable: '可改进',
+        severityProblematic: '严重问题',
     },
 
-    // 语法建议弹窗
     grammarSuggestion: {
         title: '语法建议',
-        suggestedChange: '建议修改为:',
+        suggestedChange: '建议修改:',
         explanation: '说明:',
         copy: '复制建议',
         cancel: '取消'
     },
 
-    // 国家列表
     countries: {
-        CN: '中国 (China)',
-        US: '美国 (USA)',
-        GB: '英国 (UK)',
-        JP: '日本 (Japan)',
-        KR: '韩国 (Korea)',
-        FR: '法国 (France)',
-        DE: '德国 (Germany)',
-        CA: '加拿大 (Canada)',
-        AU: '澳大利亚 (Australia)',
-        OTHER: '其他 (Other)'
+        CN: '中国',
+        US: '美国',
+        GB: '英国',
+        JP: '日本',
+        KR: '韩国',
+        FR: '法国',
+        DE: '德国',
+        CA: '加拿大',
+        AU: '澳大利亚',
+        OTHER: '其他'
     },
 
-    // 通用
     common: {
         confirm: '确定',
         cancel: '取消',
@@ -177,9 +183,7 @@ const zhCN = {
         success: '成功',
         warning: '警告',
         info: '提示'
-    },
-
-
+    }
 }
 
 // 英文语言包
@@ -201,17 +205,17 @@ const enUS = {
         passwordLength: 'Password should be at least 6 characters',
         loginSuccess: 'Login successful',
         registerSuccess: 'Registration successful',
-        registerCanceled: 'Registration canceled',
+        registerCanceled: 'Registration cancelled',
         usernamePlaceholder: 'Username (2-20 characters)',
         passwordPlaceholder: 'Password (at least 6 characters)',
-        privacyNotice: 'Registration means you agree to use data for experimental purposes'
+        privacyNotice: 'By registering, you agree that data is used for experimental purposes'
     },
 
     privacy: {
         title: 'Privacy Notice',
         agree: 'Agree',
         cancel: 'Cancel',
-        notice: 'This software uses LLM to access chat records in real-time. Data is used for experimental purposes only. Thank you for your support!',
+        notice: 'This software uses LLM to analyze chat content in real-time. Data is used for experimental purposes only. Thank you for your support!',
         dataUsage: 'Data Usage Description',
         point1: 'Chat content will be sent to local LLM model for analysis',
         point2: 'Data is used for experimental purposes only',
@@ -220,33 +224,12 @@ const enUS = {
     },
 
     chat: {
-        // 实时检测相关
-        checking: 'Checking...',
-        errorsFound: '{count} issue(s) found',
-        noErrors: 'No issues found',
-        sendWithErrorsConfirm: 'Pragmatic errors have been detected in your message. Are you sure you want to send it?',
-        sendAnyway: 'Send Anyway',
-
-        // AI Chat 相关
-        aiAssistant: 'AI Assistant',
-        aiWelcome: 'Ask me about cross-cultural communication, pragmatic differences, or get help with your messages.',
-        aiInputPlaceholder: 'Ask about culture or pragmatics...',
-        aiThinking: 'Thinking...',
-        aiError: 'Sorry, there was an error. Please try again.',
-        aiSuggest1: 'What are common pragmatic errors between Chinese and English speakers?',
-        aiSuggest2: 'How to politely decline an invitation in different cultures?',
-        aiSuggest3: 'Explain the difference between pragmalinguistic and sociopragmatic failure',
-
-        // 保留原有的 key 不变
-
         errorDetectedTitle: 'Pragmatic Error Detected',
-
         editMessage: 'Edit Message',
         editPlaceholder: 'Please revise your message...',
         applySuggestion: 'Apply Suggestion',
         sendOriginal: 'Send Original',
         sendEdited: 'Send Revised',
-
         checkFailed: 'Check Failed',
         errorDetected: 'Pragmatic Error Detected',
         errorType: 'Error Type',
@@ -254,11 +237,11 @@ const enUS = {
         suggestion: 'Suggested Revision',
         explanation: 'Explanation',
         sendConfirmTitle: 'Send Confirmation',
+        sendAnyway: 'Send Anyway',
         sendCancelled: 'Send Cancelled',
         sendSuccess: 'Sent Successfully',
         pragmalinguisticError: 'Pragmalinguistic Failure',
         sociopragmaticError: 'Sociopragmatic Failure',
-
         searchUser: 'Search User',
         connected: 'Connected',
         disconnected: 'Disconnected',
@@ -288,11 +271,25 @@ const enUS = {
         messagesDeleted: 'Deleted {count} messages',
         sendFailed: 'Send failed',
         justNow: 'Just now',
-        minutesAgo: '{n} minutes ago'
+        minutesAgo: '{n} minutes ago',
+        // 实时检测相关
+        checking: 'Checking...',
+        errorsFound: '{count} issue(s) found',
+        noErrors: 'No issues found',
+        sendWithErrorsConfirm: 'Pragmatic errors have been detected in your message. Are you sure you want to send it?',
+        // AI Chat 相关
+        aiAssistant: 'AI Assistant',
+        aiWelcome: 'Ask me about cross-cultural communication, pragmatic differences, or get help with your messages.',
+        aiInputPlaceholder: 'Ask about culture or pragmatics...',
+        aiThinking: 'Thinking...',
+        aiError: 'Sorry, there was an error. Please try again.',
+        aiSuggest1: 'What are common pragmatic errors between Chinese and English speakers?',
+        aiSuggest2: 'How to politely decline an invitation in different cultures?',
+        aiSuggest3: 'Explain the difference between pragmalinguistic and sociopragmatic failure',
     },
 
     grammar: {
-        title: 'Grammar Error Records',
+        title: 'Pragmatic Error Records',
         back: 'Back',
         clearAll: 'Clear All',
         clearType: 'Clear Current Category',
@@ -302,10 +299,20 @@ const enUS = {
         search: 'Search error content',
         typeFilter: 'Error Type',
         allTypes: 'All Types',
+        // 5种错误类型
         errorType1: 'Pragmalinguistic Failure',
         errorType2: 'Sociopragmatic Failure',
+        errorType3: 'Severe Pragmalinguistic Failure',
+        errorType4: 'Severe Sociopragmatic Failure',
+        errorType5: 'Both Pragmalinguistic & Sociopragmatic Failure',
+        // 统计标签
         type1Count: 'Pragmalinguistic Failure Count',
         type2Count: 'Sociopragmatic Failure Count',
+        type3Count: 'Severe Pragmalinguistic Count',
+        type4Count: 'Severe Sociopragmatic Count',
+        type5Count: 'Both Failures Count',
+        improvableCount: 'Improvable',
+        problematicCount: 'Problematic',
         noErrors: 'No error records',
         originalText: 'Original Text',
         suggestion: 'Suggestion',
@@ -323,7 +330,10 @@ const enUS = {
         copyFailed: 'Copy failed',
         messageDeleted: 'Original message deleted',
         updateTypeSuccess: 'Type updated successfully',
-        updateTypeFailed: 'Failed to update type'
+        updateTypeFailed: 'Failed to update type',
+        // 严重程度标签
+        severityImprovable: 'Improvable',
+        severityProblematic: 'Problematic',
     },
 
     grammarSuggestion: {
@@ -359,13 +369,12 @@ const enUS = {
         warning: 'Warning',
         info: 'Info'
     },
-
 }
 
 // 创建 i18n 实例
 const i18n = createI18n({
-    legacy: false, // 使用 Composition API 模式
-    locale: localStorage.getItem('locale') || 'zh-CN', // 默认语言
+    legacy: false,
+    locale: localStorage.getItem('locale') || 'zh-CN',
     fallbackLocale: 'zh-CN',
     messages: {
         'zh-CN': zhCN,

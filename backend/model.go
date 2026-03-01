@@ -6,11 +6,40 @@ import (
 	"gorm.io/gorm"
 )
 
-// 语法错误类型常量
+// 语用错误类型常量 - 5种分类
 const (
-	ErrorTypePragmalinguistic = "语言语用失误" // 语言语用失误
-	ErrorTypeSociopragmatic   = "社会语用失误" // 社会语用失误
+	ErrorTypePragmalinguistic       = "语用语言失误"        // Pragmalinguistic failure (improvable)
+	ErrorTypeSociopragmatic         = "社会语用失误"        // Sociopragmatic failure (improvable)
+	ErrorTypeSeverePragmalinguistic = "严重语用语言失误"      // Severe pragmalinguistic failure (problematic)
+	ErrorTypeSevereSociopragmatic   = "严重社会语用失误"      // Severe sociopragmatic failure (problematic)
+	ErrorTypeBothFailure            = "语用语言失误和社会语用失误" // Both failures (problematic)
 )
+
+// AllValidErrorTypes 所有有效的错误类型
+var AllValidErrorTypes = []string{
+	ErrorTypePragmalinguistic,
+	ErrorTypeSociopragmatic,
+	ErrorTypeSeverePragmalinguistic,
+	ErrorTypeSevereSociopragmatic,
+	ErrorTypeBothFailure,
+}
+
+// IsValidErrorType 检查错误类型是否有效
+func IsValidErrorType(errorType string) bool {
+	for _, t := range AllValidErrorTypes {
+		if t == errorType {
+			return true
+		}
+	}
+	return false
+}
+
+// IsProblematicErrorType 判断错误类型是否属于 "problematic" 级别
+func IsProblematicErrorType(errorType string) bool {
+	return errorType == ErrorTypeSeverePragmalinguistic ||
+		errorType == ErrorTypeSevereSociopragmatic ||
+		errorType == ErrorTypeBothFailure
+}
 
 // 用户角色常量
 const (
@@ -20,10 +49,10 @@ const (
 
 type User struct {
 	ID        uint           `json:"id" gorm:"primaryKey"`
-	Username  string         `json:"username" gorm:"uniqueIndex;not null"`
-	Password  string         `json:"-" gorm:"not null"`
-	Country   string         `json:"country" gorm:"not null"`
-	Role      string         `json:"role" gorm:"default:user"`
+	Username  string         `json:"username" gorm:"type:varchar(191);uniqueIndex;not null"`
+	Password  string         `json:"-" gorm:"type:varchar(255);not null"`
+	Country   string         `json:"country" gorm:"type:varchar(10);not null"`
+	Role      string         `json:"role" gorm:"type:varchar(20);default:user"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
@@ -35,6 +64,7 @@ type Message struct {
 	SenderID   uint      `json:"sender_id" gorm:"not null;index"`
 	ReceiverID uint      `json:"receiver_id" gorm:"not null;index"`
 	Content    string    `json:"content" gorm:"type:text;not null"`
+	IsRead     bool      `json:"is_read" gorm:"default:false"`
 	CreatedAt  time.Time `json:"created_at"`
 
 	// 关联
@@ -50,7 +80,7 @@ type GrammarError struct {
 	OriginalText   string    `json:"original_text" gorm:"type:text;not null"`
 	LLMSuggestion  string    `json:"llm_suggestion" gorm:"type:text"`
 	LLMExplanation string    `json:"llm_explanation" gorm:"type:text"`
-	ErrorType      string    `json:"error_type" gorm:"type:varchar(50);not null;default:'语言语用失误';index"`
+	ErrorType      string    `json:"error_type" gorm:"type:varchar(50);not null;default:'语用语言失误';index"`
 	CreatedAt      time.Time `json:"created_at"`
 
 	User User `json:"user" gorm:"foreignKey:UserID"`
@@ -69,7 +99,7 @@ func (ge *GrammarError) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// 🆕 AIChatHistory AI对话历史
+// AIChatHistory AI对话历史
 type AIChatHistory struct {
 	ID         uint      `json:"id" gorm:"primaryKey"`
 	UserID     uint      `json:"user_id" gorm:"not null;index"`

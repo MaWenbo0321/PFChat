@@ -3,52 +3,10 @@
 > vite --host 0.0.0.0
 
 
-  VITE v5.4.21  ready in 360 ms
+  VITE v5.4.21  ready in 464 ms
 
   ➜  Local:   http://localhost:3000/
   ➜  Network: http://172.18.40.144:3000/
   ➜  Network: http://172.19.0.1:3000/
-5:29:15 PM [vite] hmr update /src/views/Chat.vue, /src/views/Chat.vue?vue&type=style&index=0&scoped=ef077a5e&lang.css, /src/views/Chat.vue?vue&type=style&index=1&lang.css
-5:29:26 PM [vite] hmr update /src/views/Chat.vue, /src/views/Chat.vue?vue&type=style&index=0&scoped=ef077a5e&lang.css, /src/views/Chat.vue?vue&type=style&index=1&lang.css
-5:29:26 PM [vite] hmr update /src/views/Chat.vue?vue&type=style&index=0&scoped=ef077a5e&lang.css, /src/views/Chat.vue
-5:29:26 PM [vite] Internal server error: Element is missing end tag.
-  Plugin: vite:vue
-  File: /home/admin/PFChat/frontend/src/views/Chat.vue:669:1
-  667|  </script>
-  668|  
-  669|  <style scoped>
-     |   ^
-  670|  /* ===================== 整体布局 ===================== */
-  671|  .chat-container {
-      at createCompilerError (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1364:17)
-      at emitError (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:2997:5)
-      at Object.onend (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:2599:7)
-      at Tokenizer.finish (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1232:14)
-      at Tokenizer.parse (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1210:10)
-      at Object.baseParse (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:3036:13)
-      at Object.parse (/home/admin/PFChat/frontend/node_modules/@vue/compiler-dom/dist/compiler-dom.cjs.js:910:23)
-      at Object.parse$1 [as parse] (/home/admin/PFChat/frontend/node_modules/@vue/compiler-sfc/dist/compiler-sfc.cjs.js:1801:24)
-      at createDescriptor (file:///home/admin/PFChat/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:71:43)
-      at handleHotUpdate (file:///home/admin/PFChat/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:2198:26)
-5:29:26 PM [vite] Internal server error: Element is missing end tag.
-  Plugin: vite:vue
-  File: /home/admin/PFChat/frontend/src/views/Chat.vue:669:1
-  667|  </script>
-  668|  
-  669|  <style scoped>
-     |   ^
-  670|  /* ===================== 整体布局 ===================== */
-  671|  .chat-container {
-      at createCompilerError (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1364:17)
-      at emitError (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:2997:5)
-      at Object.onend (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:2599:7)
-      at Tokenizer.finish (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1232:14)
-      at Tokenizer.parse (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:1210:10)
-      at Object.baseParse (/home/admin/PFChat/frontend/node_modules/@vue/compiler-core/dist/compiler-core.cjs.js:3036:13)
-      at Object.parse (/home/admin/PFChat/frontend/node_modules/@vue/compiler-dom/dist/compiler-dom.cjs.js:910:23)
-      at Object.parse$1 [as parse] (/home/admin/PFChat/frontend/node_modules/@vue/compiler-sfc/dist/compiler-sfc.cjs.js:1801:24)
-      at createDescriptor (file:///home/admin/PFChat/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:71:43)
-      at handleHotUpdate (file:///home/admin/PFChat/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:2198:26)
-5:29:26 PM [vite] hmr update /src/views/Chat.vue?vue&type=style&index=0&scoped=ef077a5e&lang.css, /src/views/Chat.vue?vue&type=style&index=1&lang.css
-(node:894520) Warning: An error event has already been emitted on the socket. Please use the destroy method on the socket while handling a 'clientError' event.
+(node:2358591) Warning: An error event has already been emitted on the socket. Please use the destroy method on the socket while handling a 'clientError' event.
 (Use `node --trace-warnings ...` to show where the warning was created)

@@ -105,7 +105,7 @@
                         </div>
                       </div>
                     </template>
-                    <span class="error-indicator" :class="messageErrors[msg.id].error_type === '语言语用失误' ? 'pragma' : 'socio'">
+                    <span class="error-indicator" :class="getMessageErrorIndicatorClass(messageErrors[msg.id].error_type)">
                       <el-icon :size="14"><WarningFilled /></el-icon>
                     </span>
                   </el-tooltip>
@@ -172,7 +172,7 @@
 
           <!-- 输入框下方的错误详情卡片 -->
           <div v-if="inputErrors.length > 0" class="error-cards">
-            <div v-for="(error, index) in inputErrors" :key="index" class="error-card" :class="error.error_type === '语言语用失误' ? 'pragma-card' : 'socio-card'">
+            <div v-for="(error, index) in inputErrors" :key="index" class="error-card" :class="getErrorCardClass(error)">
               <div class="error-card-header">
                 <el-tag :type="error.error_type === '语言语用失误' ? 'warning' : 'danger'" size="small" effect="dark">
                   {{ error.error_type === '语言语用失误' ? $t('chat.pragmalinguisticError') : $t('chat.sociopragmaticError') }}
@@ -329,22 +329,43 @@ const renderedUnderlineHtml = computed(() => {
   const markers = []
   for (const error of inputErrors.value) {
     if (error.start_index !== undefined && error.end_index !== undefined) {
+      // 新
       markers.push({
         start: error.start_index,
         end: error.end_index,
-        type: error.error_type
+        type: error.error_type,
+        evaluation: error.overall_evaluation || (isProblematicErrorType(error.error_type) ? 'problematic' : 'improvable')
       })
     }
   }
   markers.sort((a, b) => a.start - b.start)
 
+  // 判断是否为严重(problematic)类型
+  const isProblematicErrorType = (errorType) => {
+    return errorType === '严重语用语言失误' ||
+        errorType === '严重社会语用失误' ||
+        errorType === '语用语言失误和社会语用失误'
+  }
+
+// 获取错误卡片CSS类
+  const getErrorCardClass = (error) => {
+    const evaluation = error.overall_evaluation ||
+        (isProblematicErrorType(error.error_type) ? 'problematic' : 'improvable')
+    return evaluation === 'problematic' ? 'problematic-card' : 'improvable-card'
+  }
+
+// 获取消息错误标识CSS类
+  const getMessageErrorIndicatorClass = (errorType) => {
+    return isProblematicErrorType(errorType) ? 'problematic' : 'improvable'
+  }
   for (const marker of markers) {
     // 正文部分
     if (marker.start > lastIndex) {
       html += escapeHtml(text.slice(lastIndex, marker.start))
     }
     // 错误部分
-    const errorClass = marker.type === '语言语用失误' ? 'underline-pragma' : 'underline-socio'
+    // 新
+    const errorClass = marker.evaluation === 'problematic' ? 'underline-problematic' : 'underline-improvable'
     html += `<span class="${errorClass}">${escapeHtml(text.slice(marker.start, marker.end))}</span>`
     lastIndex = marker.end
   }
@@ -822,11 +843,11 @@ const formatMessageTime = (timestamp) => {
 .error-indicator:hover {
   transform: scale(1.2);
 }
-.error-indicator.pragma {
+.error-indicator.improvable {
   color: #e6a23c;
   background: #fdf6ec;
 }
-.error-indicator.socio {
+.error-indicator.problematic {
   color: #f56c6c;
   background: #fef0f0;
 }
@@ -900,14 +921,14 @@ const formatMessageTime = (timestamp) => {
   pointer-events: none;
   z-index: 0;
 }
-.underline-layer :deep(.underline-pragma) {
+.underline-layer :deep(.underline-improvable) {
   background: transparent;
-  border-bottom: 3px solid #e6a23c;
+  border-bottom: 3px solid #e6a23c;  /* 橙色 */
   color: transparent;
 }
-.underline-layer :deep(.underline-socio) {
+.underline-layer :deep(.underline-problematic) {
   background: transparent;
-  border-bottom: 3px solid #f56c6c;
+  border-bottom: 3px solid #f56c6c;  /* 红色 */
   color: transparent;
 }
 .input-editor {
@@ -956,11 +977,11 @@ const formatMessageTime = (timestamp) => {
   margin-bottom: 6px;
   border-left: 4px solid;
 }
-.error-card.pragma-card {
+.error-card.improvable-card {
   background: #fdf6ec;
   border-left-color: #e6a23c;
 }
-.error-card.socio-card {
+.error-card.problematic-card {
   background: #fef0f0;
   border-left-color: #f56c6c;
 }

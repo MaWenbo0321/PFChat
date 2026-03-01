@@ -30,8 +30,10 @@
       <!-- 统计卡片 -->
       <div class="stats">
         <el-statistic :title="$t('grammar.totalErrors')" :value="statistics.total" />
-        <el-statistic :title="$t('grammar.type1Count')" :value="statistics.by_type['语言语用失误'] || 0" />
-        <el-statistic :title="$t('grammar.type2Count')" :value="statistics.by_type['社会语用失误'] || 0" />
+        <el-statistic :title="$t('grammar.todayErrors')" :value="statistics.today_count" />
+        <el-statistic :title="$t('grammar.weekErrors')" :value="statistics.week_count" />
+        <el-statistic :title="$t('grammar.improvableCount')" :value="improvableTotal" />
+        <el-statistic :title="$t('grammar.problematicCount')" :value="problematicTotal" />
       </div>
 
       <!-- 筛选器 -->
@@ -46,12 +48,15 @@
         <el-select
             v-model="currentTypeFilter"
             :placeholder="$t('grammar.typeFilter')"
-            style="width: 250px"
+            style="width: 300px"
             @change="handleTypeChange"
         >
           <el-option :label="$t('grammar.allTypes')" value="all" />
-          <el-option :label="$t('grammar.errorType1')" value="语言语用失误" />
+          <el-option :label="$t('grammar.errorType1')" value="语用语言失误" />
           <el-option :label="$t('grammar.errorType2')" value="社会语用失误" />
+          <el-option :label="$t('grammar.errorType3')" value="严重语用语言失误" />
+          <el-option :label="$t('grammar.errorType4')" value="严重社会语用失误" />
+          <el-option :label="$t('grammar.errorType5')" value="语用语言失误和社会语用失误" />
         </el-select>
       </div>
 
@@ -61,8 +66,16 @@
           <div class="error-group" v-if="groupErrors.length > 0">
             <div class="group-header">
               <h2>
-                <el-tag :type="errorType === '语言语用失误' ? 'danger' : 'warning'" size="large">
-                  {{ errorType === '语言语用失误' ? $t('grammar.errorType1') : $t('grammar.errorType2') }}
+                <el-tag :type="getErrorTagType(errorType)" size="large">
+                  {{ getErrorTypeLabel(errorType) }}
+                </el-tag>
+                <el-tag
+                    :type="isProblematicType(errorType) ? 'danger' : 'warning'"
+                    size="small"
+                    effect="plain"
+                    style="margin-left: 8px;"
+                >
+                  {{ isProblematicType(errorType) ? $t('grammar.severityProblematic') : $t('grammar.severityImprovable') }}
                 </el-tag>
                 <span class="group-count">({{ groupErrors.length }})</span>
               </h2>
@@ -157,8 +170,11 @@
       <el-form :model="changeTypeForm">
         <el-form-item :label="$t('grammar.errorTypeLabel')">
           <el-select v-model="changeTypeForm.newType" style="width: 100%">
-            <el-option :label="$t('grammar.errorType1')" value="语言语用失误" />
+            <el-option :label="$t('grammar.errorType1')" value="语用语言失误" />
             <el-option :label="$t('grammar.errorType2')" value="社会语用失误" />
+            <el-option :label="$t('grammar.errorType3')" value="严重语用语言失误" />
+            <el-option :label="$t('grammar.errorType4')" value="严重社会语用失误" />
+            <el-option :label="$t('grammar.errorType5')" value="语用语言失误和社会语用失误" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -202,7 +218,57 @@ const currentTypeFilter = ref('all')
 const changeTypeDialogVisible = ref(false)
 const changeTypeForm = ref({
   errorId: null,
-  newType: '语言语用失误'  // 原来是 '错误1'
+  newType: '语用语言失误'
+})
+
+// 5种错误类型
+const ALL_ERROR_TYPES = [
+  '语用语言失误',
+  '社会语用失误',
+  '严重语用语言失误',
+  '严重社会语用失误',
+  '语用语言失误和社会语用失误'
+]
+
+// 判断是否为严重(problematic)类型
+const isProblematicType = (errorType) => {
+  return errorType === '严重语用语言失误' ||
+      errorType === '严重社会语用失误' ||
+      errorType === '语用语言失误和社会语用失误'
+}
+
+// 获取错误类型的 tag 颜色
+const getErrorTagType = (errorType) => {
+  if (isProblematicType(errorType)) {
+    return 'danger' // 红色
+  }
+  return 'warning' // 橙色
+}
+
+// 获取错误类型的本地化标签
+const getErrorTypeLabel = (errorType) => {
+  const labelMap = {
+    '语用语言失误': t('grammar.errorType1'),
+    '社会语用失误': t('grammar.errorType2'),
+    '严重语用语言失误': t('grammar.errorType3'),
+    '严重社会语用失误': t('grammar.errorType4'),
+    '语用语言失误和社会语用失误': t('grammar.errorType5'),
+  }
+  return labelMap[errorType] || errorType
+}
+
+// 计算可改进总数
+const improvableTotal = computed(() => {
+  const byType = statistics.value.by_type || {}
+  return (byType['语用语言失误'] || 0) + (byType['社会语用失误'] || 0)
+})
+
+// 计算严重问题总数
+const problematicTotal = computed(() => {
+  const byType = statistics.value.by_type || {}
+  return (byType['严重语用语言失误'] || 0) +
+      (byType['严重社会语用失误'] || 0) +
+      (byType['语用语言失误和社会语用失误'] || 0)
 })
 
 // 按搜索关键词筛选
@@ -219,14 +285,17 @@ const filteredErrors = computed(() => {
 
 // 按错误类型分组
 const groupedErrors = computed(() => {
-  const groups = {
-    '语言语用失误': [],  // 原来是 '错误1'
-    '社会语用失误': []   // 原来是 '错误2'
-  }
+  const groups = {}
+  ALL_ERROR_TYPES.forEach(type => {
+    groups[type] = []
+  })
 
   filteredErrors.value.forEach(error => {
     if (groups[error.error_type]) {
       groups[error.error_type].push(error)
+    } else {
+      // 兜底: 放到语用语言失误分组
+      groups['语用语言失误'].push(error)
     }
   })
 
@@ -268,7 +337,7 @@ const handleCommand = (command, error) => {
 const openChangeTypeDialog = (error) => {
   changeTypeForm.value = {
     errorId: error.id,
-    newType: error.error_type === '语言语用失误' ? '社会语用失误' : '语言语用失误'
+    newType: error.error_type
   }
   changeTypeDialogVisible.value = true
 }
@@ -322,7 +391,7 @@ const clearCurrentType = async () => {
         }
     )
 
-    await api.clearGrammarErrorsByType(currentTypeFilter.value)
+    await api.clearGrammarErrors(currentTypeFilter.value)
     ElMessage.success(t('grammar.clearSuccess'))
     await loadErrors(currentTypeFilter.value)
   } catch (error) {
@@ -345,7 +414,7 @@ const clearAll = async () => {
         }
     )
 
-    await api.clearGrammarErrorsByType('all')
+    await api.clearGrammarErrors('all')
     ElMessage.success(t('grammar.clearSuccess'))
     await loadErrors(currentTypeFilter.value)
   } catch (error) {
@@ -502,48 +571,45 @@ const formatDate = (dateString) => {
 }
 
 .error-content {
-  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .section {
-  margin: 15px 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: #fafafa;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  font-size: 13px;
   font-weight: 600;
-  margin-bottom: 10px;
   color: #606266;
+  margin-bottom: 8px;
 }
 
 .original-text {
-  padding: 12px;
-  background: #fef0f0;
-  border-left: 3px solid #f56c6c;
-  border-radius: 4px;
-  color: #606266;
+  font-size: 14px;
+  color: #303133;
   line-height: 1.6;
 }
 
 .suggestion-text {
-  padding: 12px;
-  background: #f0f9ff;
-  border-left: 3px solid #67c23a;
-  border-radius: 4px;
-  color: #606266;
-  line-height: 1.6;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: #67c23a;
+  line-height: 1.6;
 }
 
 .explanation-text {
-  padding: 12px;
-  background: #f4f4f5;
-  border-left: 3px solid #409eff;
-  border-radius: 4px;
+  font-size: 14px;
   color: #606266;
   line-height: 1.6;
 }
@@ -551,12 +617,11 @@ const formatDate = (dateString) => {
 .deleted-notice {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px;
-  background: #f4f4f5;
-  border-radius: 4px;
+  gap: 6px;
   color: #909399;
   font-size: 13px;
-  margin-top: 10px;
+  padding: 8px;
+  background: #f5f5f5;
+  border-radius: 4px;
 }
 </style>
