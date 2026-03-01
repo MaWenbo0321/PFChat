@@ -3,10 +3,8 @@
 > vite --host 0.0.0.0
 
 
-  VITE v5.4.21  ready in 464 ms
+  VITE v5.4.21  ready in 354 ms
 
   ➜  Local:   http://localhost:3000/
   ➜  Network: http://172.18.40.144:3000/
   ➜  Network: http://172.19.0.1:3000/
-(node:2358591) Warning: An error event has already been emitted on the socket. Please use the destroy method on the socket while handling a 'clientError' event.
-(Use `node --trace-warnings ...` to show where the warning was created)

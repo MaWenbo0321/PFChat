@@ -315,6 +315,26 @@ const filteredUsers = computed(() => {
   )
 })
 
+// ===================== 错误类型判断工具函数 =====================
+// 判断是否为严重(problematic)类型
+const isProblematicErrorType = (errorType) => {
+  return errorType === '严重语用语言失误' ||
+      errorType === '严重社会语用失误' ||
+      errorType === '语用语言失误和社会语用失误'
+}
+
+// 获取错误卡片CSS类
+const getErrorCardClass = (error) => {
+  const evaluation = error.overall_evaluation ||
+      (isProblematicErrorType(error.error_type) ? 'problematic' : 'improvable')
+  return evaluation === 'problematic' ? 'problematic-card' : 'improvable-card'
+}
+
+// 获取消息错误标识CSS类
+const getMessageErrorIndicatorClass = (errorType) => {
+  return isProblematicErrorType(errorType) ? 'problematic' : 'improvable'
+}
+
 // ===================== 下划线渲染 =====================
 const renderedUnderlineHtml = computed(() => {
   if (!messageInput.value || inputErrors.value.length === 0) {
@@ -325,11 +345,9 @@ const renderedUnderlineHtml = computed(() => {
   let html = ''
   let lastIndex = 0
 
-  // 收集所有错误的位置信息, 按 start 排序
   const markers = []
   for (const error of inputErrors.value) {
     if (error.start_index !== undefined && error.end_index !== undefined) {
-      // 新
       markers.push({
         start: error.start_index,
         end: error.end_index,
@@ -340,37 +358,17 @@ const renderedUnderlineHtml = computed(() => {
   }
   markers.sort((a, b) => a.start - b.start)
 
-  // 判断是否为严重(problematic)类型
-  const isProblematicErrorType = (errorType) => {
-    return errorType === '严重语用语言失误' ||
-        errorType === '严重社会语用失误' ||
-        errorType === '语用语言失误和社会语用失误'
-  }
+  // ❌ 删除这里原来的 isProblematicErrorType、getErrorCardClass、getMessageErrorIndicatorClass 定义
 
-// 获取错误卡片CSS类
-  const getErrorCardClass = (error) => {
-    const evaluation = error.overall_evaluation ||
-        (isProblematicErrorType(error.error_type) ? 'problematic' : 'improvable')
-    return evaluation === 'problematic' ? 'problematic-card' : 'improvable-card'
-  }
-
-// 获取消息错误标识CSS类
-  const getMessageErrorIndicatorClass = (errorType) => {
-    return isProblematicErrorType(errorType) ? 'problematic' : 'improvable'
-  }
   for (const marker of markers) {
-    // 正文部分
     if (marker.start > lastIndex) {
       html += escapeHtml(text.slice(lastIndex, marker.start))
     }
-    // 错误部分
-    // 新
     const errorClass = marker.evaluation === 'problematic' ? 'underline-problematic' : 'underline-improvable'
     html += `<span class="${errorClass}">${escapeHtml(text.slice(marker.start, marker.end))}</span>`
     lastIndex = marker.end
   }
 
-  // 剩余部分
   if (lastIndex < text.length) {
     html += escapeHtml(text.slice(lastIndex))
   }
@@ -500,6 +498,11 @@ const sendMessage = debounce(async () => {
   const content = messageInput.value.trim()
   const receiverId = chatStore.currentUser.id
 
+  // 【修复2】发送前先执行一次即时检测，确保 inputErrors 是最新的
+  if (content !== lastCheckedContent) {
+    await performCheck()
+  }
+
   // 如果有检测到错误, 弹窗确认
   if (inputErrors.value.length > 0) {
     try {
@@ -518,16 +521,20 @@ const sendMessage = debounce(async () => {
   }
 
   try {
-    // 收集错误信息用于关联
     const errorRecordId = inputErrors.value.length > 0 && inputErrors.value[0].error_record_id
         ? inputErrors.value[0].error_record_id
         : 0
 
-    await api.sendMessage({
+    const sentMessage = await api.sendMessage({  // 【修复1】拿到返回值
       receiver_id: receiverId,
       content: content,
       error_record_id: errorRecordId
     })
+
+    // 【修复1】立即将消息加入 store，不依赖 WebSocket 回推
+    if (sentMessage && sentMessage.id) {
+      chatStore.addMessage(receiverId, sentMessage)
+    }
 
     messageInput.value = ''
     inputErrors.value = []
