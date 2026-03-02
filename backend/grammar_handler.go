@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
@@ -103,9 +104,10 @@ func realtimeCheck(c *gin.Context) {
 	}
 	// 检查是否已存在相同的错误记录（避免重复保存）
 	var existingError GrammarError
+	sixtySecondsAgo := time.Now().Add(-60 * time.Second)
 	duplicateCheck := db.Where(
 		"user_id = ? AND original_text = ? AND message_id = 0",
-		userID, req.Content,
+		userID, req.Content, sixtySecondsAgo,
 	).Order("created_at DESC").First(&existingError)
 
 	if duplicateCheck.Error == nil {

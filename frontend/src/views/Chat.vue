@@ -91,8 +91,8 @@
                     <template #content>
                       <div class="error-tooltip-content">
                         <div class="error-tooltip-header">
-                          <el-tag :type="messageErrors[msg.id].error_type === '语言语用失误' ? 'warning' : 'danger'" size="small">
-                            {{ messageErrors[msg.id].error_type === '语言语用失误' ? $t('chat.pragmalinguisticError') : $t('chat.sociopragmaticError') }}
+                          <el-tag :type="messageErrors[msg.id].error_type === '语用语言失误' ? 'warning' : 'danger'" size="small">
+                            {{ messageErrors[msg.id].error_type === '语用语言失误' ? $t('chat.pragmalinguisticError') : $t('chat.sociopragmaticError') }}
                           </el-tag>
                         </div>
                         <div class="error-tooltip-section" v-if="messageErrors[msg.id].suggestion">
@@ -174,8 +174,8 @@
           <div v-if="inputErrors.length > 0" class="error-cards">
             <div v-for="(error, index) in inputErrors" :key="index" class="error-card" :class="getErrorCardClass(error)">
               <div class="error-card-header">
-                <el-tag :type="error.error_type === '语言语用失误' ? 'warning' : 'danger'" size="small" effect="dark">
-                  {{ error.error_type === '语言语用失误' ? $t('chat.pragmalinguisticError') : $t('chat.sociopragmaticError') }}
+                <el-tag :type="error.error_type === '语用语言失误' ? 'warning' : 'danger'" size="small" effect="dark">
+                  {{ error.error_type === '语用语言失误' ? $t('chat.pragmalinguisticError') : $t('chat.sociopragmaticError') }}
                 </el-tag>
                 <el-button type="primary" size="small" text @click="applySuggestion(error)">
                   {{ $t('chat.applySuggestion') }}
@@ -379,6 +379,10 @@ const renderedUnderlineHtml = computed(() => {
 // ===================== 生命周期 =====================
 onMounted(async () => {
   wsManager.connect()
+  // 【Fix】恢复当前用户的草稿（从 GrammarErrors 返回时）
+  if (chatStore.currentUser) {
+    messageInput.value = chatStore.getDraft(chatStore.currentUser.id)
+  }
 
   try {
     const users = await api.getUsers()
@@ -407,7 +411,13 @@ watch(() => chatStore.currentUser, async (newUser) => {
       console.error('Load messages error:', error)
     }
   }
-  // 清除输入框和错误
+  // 【Fix】恢复新用户的草稿，不清空输入框
+  if (newUser) {
+    messageInput.value = chatStore.getDraft(newUser.id)
+  } else {
+    messageInput.value = ''
+  }
+  // 只清除检测状态
   inputErrors.value = []
   lastCheckedContent = ''
   lastCheckTime.value = null
@@ -452,6 +462,10 @@ const loadMessageErrors = async () => {
 const handleInputChange = () => {
   // 输入变化时同步滚动
   syncScroll()
+  // 【Fix】保存草稿到 chatStore
+  if (chatStore.currentUser) {
+    chatStore.saveDraft(chatStore.currentUser.id, messageInput.value)
+  }
   // 用户输入变化时，重置防抖定时器
   // 用户停止输入 2 秒后才触发检测
   if (debounceTimer) {
@@ -462,7 +476,7 @@ const handleInputChange = () => {
   if (content && content !== lastCheckedContent && chatStore.currentUser) {
     debounceTimer = setTimeout(() => {
       performCheck()
-    }, 1000)
+    }, 3000)
   }
   // 如果输入框被清空，清除错误状态
   if (!content) {
@@ -552,6 +566,7 @@ const sendMessage = debounce(async () => {
     }
 
     messageInput.value = ''
+    chatStore.clearDraft(receiverId)  // 【Fix】
     inputErrors.value = []
     lastCheckedContent = ''
     lastCheckTime.value = null

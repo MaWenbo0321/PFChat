@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -113,8 +114,15 @@ func checkGrammar(userID uint, message Message) {
 		// 通知发送方
 		notifyUser(userID, grammarError)
 
-		// 通知接收方 (用新的类型, 前端不弹窗)
-		notifyReceiver(message.ReceiverID, message.ID, grammarError)
+		// 【Fix Issue 4】为接收方生成本地化解释，再通知接收方
+		receiverExplanation := generateReceiverExplanation(
+			message.Content,
+			result.Explanation,
+			errorType,
+			sender,
+			receiver,
+		)
+		notifyReceiver(message.ReceiverID, message.ID, grammarError, receiverExplanation)
 	}
 }
 
@@ -374,6 +382,83 @@ func makeDashScopeRequest(apiKey string, reqBody DashScopeRequest) (*DashScopeRe
 	return &dashResp, nil
 }
 
+// buildReceiverExplanationPrompt 为接收方构建本地化解释提示词
+func buildReceiverExplanationPrompt(originalText, senderExplanation, errorType string, sender User, receiver User) string {
+	var sb strings.Builder
+
+	isChineseReceiver := receiver.Country == "CN"
+
+	if isChineseReceiver {
+		sb.WriteString("你是一位跨文化交际专家。请根据以下信息，用中文生成1-2句简短的提示，")
+		sb.WriteString("向接收者说明发送者的消息存在语用问题，帮助接收者理解这可能是语言或文化差异导致的。\n\n")
+	} else {
+		sb.WriteString("You are an intercultural communication expert. Based on the information below, ")
+		sb.WriteString("generate 1-2 brief sentences in English for the message receiver, ")
+		sb.WriteString("explaining that the sender's message has a pragmatic issue ")
+		sb.WriteString("that may be due to language or cultural differences.\n\n")
+	}
+
+	sb.WriteString(fmt.Sprintf("Sender's country: %s\n", getCountryName(sender.Country)))
+	sb.WriteString(fmt.Sprintf("Receiver's country: %s\n", getCountryName(receiver.Country)))
+	sb.WriteString(fmt.Sprintf("Original message: \"%s\"\n", originalText))
+	sb.WriteString(fmt.Sprintf("Error type: %s\n", errorType))
+	sb.WriteString(fmt.Sprintf("Technical explanation (for reference only, do NOT copy verbatim): %s\n\n", senderExplanation))
+
+	if isChineseReceiver {
+		sb.WriteString("用1-2句友善自然的中文说明语用问题及文化差异背景。不要重复原消息，不要使用技术性术语。只输出那1-2句话。")
+	} else {
+		sb.WriteString("Write 1-2 friendly natural sentences explaining the pragmatic issue and cultural context. " +
+			"Do NOT use technical linguistic terms. Output only those sentences.")
+	}
+
+	return sb.String()
+}
+
+// generateReceiverExplanation 为接收方生成本地化解释 (调用LLM翻译/适配)
+func generateReceiverExplanation(originalText, senderExplanation, errorType string, sender User, receiver User) string {
+	if senderExplanation == "" {
+		return ""
+	}
+
+	apiKey := os.Getenv("DASHSCOPE_API_KEY")
+	if apiKey == "" {
+		return senderExplanation
+	}
+
+	prompt := buildReceiverExplanationPrompt(originalText, senderExplanation, errorType, sender, receiver)
+
+	reqBody := DashScopeRequest{
+		Model: "qwen-turbo",
+		Input: DashScopeInput{
+			Messages: []DashScopeMessage{
+				{Role: "user", Content: prompt},
+			},
+		},
+		Parameters: DashScopeParameters{
+			Temperature: 0.5,
+			MaxTokens:   200,
+		},
+	}
+
+	dashResp, err := makeDashScopeRequest(apiKey, reqBody)
+	if err != nil {
+		log.Printf("generateReceiverExplanation error: %v", err)
+		return senderExplanation
+	}
+
+	var responseText string
+	if len(dashResp.Output.Choices) > 0 {
+		responseText = strings.TrimSpace(dashResp.Output.Choices[0].Message.Content)
+	} else if dashResp.Output.Text != "" {
+		responseText = strings.TrimSpace(dashResp.Output.Text)
+	}
+
+	if responseText == "" {
+		return senderExplanation
+	}
+	return responseText
+}
+
 // callDashScopeAPI 调用 DashScope API 进行语用检查
 func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
 	apiKey := "sk-8ab77da79b894ba6beb61c9190c74602"
@@ -507,14 +592,20 @@ func notifyUser(userID uint, grammarError GrammarError) {
 }
 
 // notifyReceiver 通知接收方有语用错误 (不弹窗, 只刷新标识)
-func notifyReceiver(receiverID uint, messageID uint, grammarError GrammarError) {
+func notifyReceiver(receiverID uint, messageID uint, grammarError GrammarError, receiverExplanation string) {
+	// 如果没有提供接收方解释，降级使用发送方的解释
+	explanation := receiverExplanation
+	if explanation == "" {
+		explanation = grammarError.LLMExplanation
+	}
+
 	wsMsg := WSMessage{
 		Type: "receiver_error_notify",
 		Data: map[string]interface{}{
 			"message_id":  messageID,
 			"error_type":  grammarError.ErrorType,
 			"suggestion":  grammarError.LLMSuggestion,
-			"explanation": grammarError.LLMExplanation,
+			"explanation": explanation, // 接收方本地化的解释
 		},
 		Timestamp: time.Now(),
 	}

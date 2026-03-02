@@ -16,6 +16,26 @@ export const useChatStore = defineStore('chat', () => {
         if (!currentChatUser.value) return []
         return messages.value[currentChatUser.value.id] || []
     })
+    const draftMessages = ref({}) // { userId: draftText }
+    // 新增3个方法:
+    const saveDraft = (userId, text) => {
+        if (userId) {
+            draftMessages.value[userId] = text
+        }
+    }
+
+    const getDraft = (userId) => {
+        if (!userId) return ''
+        return draftMessages.value[userId] || ''
+    }
+
+    const clearDraft = (userId) => {
+        if (userId) {
+            delete draftMessages.value[userId]
+        }
+    }
+
+
 
     // 计算属性 - 连接状态
     const isConnected = computed(() => connected.value)
@@ -95,6 +115,11 @@ export const useChatStore = defineStore('chat', () => {
         addMessage,
         removeMessage,
         setWebSocket,
-        closeWebSocket
+        closeWebSocket,
+
+        draftMessages,
+        saveDraft,
+        getDraft,
+        clearDraft
     }
 })
