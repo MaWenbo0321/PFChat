@@ -101,7 +101,32 @@ func realtimeCheck(c *gin.Context) {
 			overallEvaluation = "improvable"
 		}
 	}
+	// 检查是否已存在相同的错误记录（避免重复保存）
+	var existingError GrammarError
+	duplicateCheck := db.Where(
+		"user_id = ? AND original_text = ? AND message_id = 0",
+		userID, req.Content,
+	).Order("created_at DESC").First(&existingError)
 
+	if duplicateCheck.Error == nil {
+		// 已存在相同的错误记录，直接返回已有记录
+		c.JSON(http.StatusOK, RealtimeCheckResponse{
+			HasError: true,
+			Errors: []RealtimeCheckError{
+				{
+					StartIndex:        0,
+					EndIndex:          utf8.RuneCountInString(req.Content),
+					OriginalText:      req.Content,
+					Suggestion:        existingError.LLMSuggestion,
+					Explanation:       existingError.LLMExplanation,
+					ErrorType:         existingError.ErrorType,
+					ErrorRecordID:     existingError.ID,
+					OverallEvaluation: overallEvaluation,
+				},
+			},
+		})
+		return
+	}
 	// 保存到数据库
 	grammarError := GrammarError{
 		UserID:         userID,

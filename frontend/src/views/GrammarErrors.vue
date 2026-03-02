@@ -309,7 +309,20 @@ onMounted(async () => {
 const loadErrors = async (errorType = 'all') => {
   try {
     const response = await api.getGrammarErrors(errorType)
-    errors.value = response.errors || []
+    const rawErrors = response.errors || []
+
+    // 去重: 相同 original_text + error_type 的记录只保留最新一条
+    const deduped = []
+    const seen = new Set()
+    for (const err of rawErrors) {
+      const key = `${err.original_text}||${err.error_type}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        deduped.push(err)
+      }
+    }
+
+    errors.value = deduped
     statistics.value = response.statistics || {
       total: 0,
       by_type: {},

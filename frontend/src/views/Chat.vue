@@ -294,7 +294,7 @@ const underlineLayer = ref(null)
 const isChecking = ref(false)
 const inputErrors = ref([])
 const lastCheckTime = ref(null)
-let checkTimer = null
+let debounceTimer = null
 let lastCheckedContent = ''
 
 // ===================== 接收方消息错误标识 =====================
@@ -386,18 +386,11 @@ onMounted(async () => {
   } catch (error) {
     console.error('Load users error:', error)
   }
-
-  // 启动5秒定时检测
-  checkTimer = setInterval(() => {
-    if (messageInput.value.trim() && messageInput.value.trim() !== lastCheckedContent && chatStore.currentUser) {
-      performCheck()
-    }
-  }, 5000)
 })
 
 onUnmounted(() => {
   wsManager.disconnect()
-  if (checkTimer) clearInterval(checkTimer)
+  if (debounceTimer) clearTimeout(debounceTimer)
 })
 
 // ===================== 监听当前用户变化 =====================
@@ -409,7 +402,7 @@ watch(() => chatStore.currentUser, async (newUser) => {
       await nextTick()
       scrollToBottom()
       // 加载接收方消息的错误标识
-      loadMessageErrors()
+      await loadMessageErrors()
     } catch (error) {
       console.error('Load messages error:', error)
     }
@@ -418,6 +411,10 @@ watch(() => chatStore.currentUser, async (newUser) => {
   inputErrors.value = []
   lastCheckedContent = ''
   lastCheckTime.value = null
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
 })
 
 // 监听新消息加入后检查错误
@@ -455,6 +452,24 @@ const loadMessageErrors = async () => {
 const handleInputChange = () => {
   // 输入变化时同步滚动
   syncScroll()
+  // 用户输入变化时，重置防抖定时器
+  // 用户停止输入 2 秒后才触发检测
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+  const content = messageInput.value.trim()
+  if (content && content !== lastCheckedContent && chatStore.currentUser) {
+    debounceTimer = setTimeout(() => {
+      performCheck()
+    }, 1000)
+  }
+  // 如果输入框被清空，清除错误状态
+  if (!content) {
+    inputErrors.value = []
+    lastCheckedContent = ''
+    lastCheckTime.value = null
+  }
 }
 
 const syncScroll = () => {
@@ -550,7 +565,24 @@ const sendMessage = debounce(async () => {
 // ===================== 应用建议 =====================
 const applySuggestion = (error) => {
   if (error.suggestion) {
-    messageInput.value = error.suggestion
+    // 提取纯净的修改后句子，去除 LLM 可能附带的前缀说明
+    let clean = error.suggestion
+    // 去除中文前缀如 "改为：", "建议改为：", "修改为："
+    clean = clean.replace(/^(改为[：:\s]*|建议改为[：:\s]*|修改为[：:\s]*)/i, '')
+    // 去除英文前缀如 "Change to:", "Revised:", "Try:"
+    clean = clean.replace(/^(change\s+to[：:\s]*|revised[：:\s]*|suggested[：:\s]*|try[：:\s]*)/i, '')
+    // 如果被引号包裹，去掉外层引号
+    clean = clean.replace(/^["""](.*)[""\"]$/, '$1')
+    // 截断 "或..." / "or alternatively..." 等备选方案部分
+    const orPattern = /[""\"]?\s*(或更自然的|或者|或\s|;\s*or\s|,\s*or alternatively)/
+    const orMatch = clean.match(orPattern)
+    if (orMatch) {
+      clean = clean.substring(0, orMatch.index)
+    }
+    // 清理残留尾部引号和空格
+    clean = clean.replace(/["""]$/, '').trim()
+
+    messageInput.value = clean || error.suggestion
     inputErrors.value = []
     lastCheckedContent = ''
   }

@@ -314,6 +314,14 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 	sb.WriteString("  \"suggestion\": \"suggested revision or improvement\",\n")
 	sb.WriteString("  \"explanation\": \"detailed explanation of the pragmatic issue\"\n")
 	sb.WriteString("}\n\n")
+
+	sb.WriteString("CRITICAL RULE for the \"suggestion\" field:\n")
+	sb.WriteString("- The \"suggestion\" field must contain ONLY the corrected/improved complete sentence that the user should say.\n")
+	sb.WriteString("- Do NOT include any prefix like \"改为\", \"修改为\", \"Change to\", \"Try\", \"Revised\" etc.\n")
+	sb.WriteString("- Do NOT include alternative options like \"或更自然的...\", \"or alternatively...\".\n")
+	sb.WriteString("- Do NOT include any explanation in the suggestion field - put explanations in the \"explanation\" field.\n")
+	sb.WriteString("- Just output the single best corrected sentence, nothing else.\n")
+
 	sb.WriteString("If no pragmatic failure is detected, return:\n")
 	sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
 
