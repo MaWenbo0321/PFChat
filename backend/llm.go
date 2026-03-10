@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
@@ -165,179 +164,155 @@ func mapErrorType(result *GrammarCheckResponse) string {
 func buildCombinedPrompt(history []Message, current Message, sender User, receiver User) string {
 	var sb strings.Builder
 
-	// 根据发送者国籍选择语言
-	isChineseSender := sender.Country == "CN"
+	// 【Fix】基于消息实际语言判断，而非发送者国籍
+	// 外国人可能用中文写消息，此时建议也应该用中文；
+	// explanation 则用接收者的母语（或发送者的母语）帮助理解
+	msgLang := detectMessageLanguage(current.Content)
+	isChineseMsg := msgLang == "zh"
 
-	if isChineseSender {
+	// prompt 框架语言也跟随消息语言（方便 LLM 理解上下文）
+	if isChineseMsg {
 		// 中文 prompt
 		sb.WriteString("你是一位精通语用学和跨文化交际的语言学专家。\n")
 		sb.WriteString("你的任务是分析在线聊天中平等关系交际者（如同学或陌生人）之间的话语。\n\n")
 
 		sb.WriteString("重要约束:\n")
-		sb.WriteString("- 不要假设一定存在错误。\n")
-		sb.WriteString("- 不要对轻微的语法问题过度敏感。\n")
-		sb.WriteString("- 不影响人际意义的轻微措辞不完美不应被视为语用失误。\n")
-		sb.WriteString("- 只关注有意义的人际影响。\n\n")
-
-		// 对话双方信息
-		sb.WriteString("对话双方的文化背景:\n")
-		sb.WriteString(fmt.Sprintf("- 发送者: %s, 国家: %s\n", sender.Username, getCountryName(sender.Country)))
-		sb.WriteString(fmt.Sprintf("- 接收者: %s, 国家: %s\n\n", receiver.Username, getCountryName(receiver.Country)))
-
-		// 对话历史 (最多5条)
-		if len(history) > 0 {
-			sb.WriteString("对话历史 (作为背景信息):\n")
-			limit := len(history)
-			if limit > 5 {
-				limit = 5
-			}
-			for i := limit - 1; i >= 0; i-- {
-				msg := history[i]
-				speaker := "发送者"
-				if msg.SenderID == receiver.ID {
-					speaker = "接收者"
-				}
-				sb.WriteString(fmt.Sprintf("- [%s]: %s\n", speaker, msg.Content))
-			}
-			sb.WriteString("\n")
-		}
-
-		// 当前消息 (只判断这句)
-		sb.WriteString(fmt.Sprintf("当前待分析话语 (只判断这一句): \"%s\"\n\n", current.Content))
-
-		// 分析步骤
-		sb.WriteString("分析步骤:\n\n")
-
-		sb.WriteString("第一步: 判断话语是否包含不礼貌。\n")
-		sb.WriteString("不礼貌定义为:\n")
-		sb.WriteString("- 没有缓和手段的明显面子威胁行为\n")
-		sb.WriteString("- 明显粗鲁、轻蔑、攻击性或贬低的语气\n")
-		sb.WriteString("- 在平等地位在线互动中严重违反规范\n")
-		sb.WriteString("仅仅直接并不自动等于不礼貌。\n\n")
-
-		sb.WriteString("第二步: 判断是否存在语用失误。\n")
-		sb.WriteString("A. 语用语言失误 (Pragmalinguistic failure):\n")
-		sb.WriteString("- 使用不恰当的语言形式表达预期意义\n")
-		sb.WriteString("- 误用惯用表达（如请求、道歉、拒绝）\n")
-		sb.WriteString("- 无意间扭曲人际意义的词汇或语法选择\n")
-		sb.WriteString("- 形式与功能不匹配\n")
-		sb.WriteString("不影响人际意义的轻微语法错误不应计入。\n\n")
-
-		sb.WriteString("B. 社会语用失误 (Sociopragmatic failure):\n")
-		sb.WriteString("- 违反平等地位在线互动的社会规范\n")
-		sb.WriteString("- 不适当的直接程度、正式程度或缓和手段\n")
-		sb.WriteString("- 对人际距离或关系期望的误判\n")
-		sb.WriteString("- 合理情况下会造成人际不适的表达\n")
-		sb.WriteString("仅仅直接并不自动构成违反，除非明显超出合理预期。\n\n")
-
-		sb.WriteString("第三步: 根据组合情况给出评价:\n")
-		sb.WriteString("- 如果两种失误都没有 → overall_evaluation: \"good\"\n")
-		sb.WriteString("- 如果只有一种失误 → overall_evaluation: \"improvable\"，并提供简要建议\n")
-		sb.WriteString("- 如果两种失误都有 → overall_evaluation: \"problematic\"，并提供修改版本\n")
-		sb.WriteString("例外规则: 如果任一失误极其严重（明显冒犯、强烈威胁面子或严重意义扭曲），直接判定为 \"problematic\"\n\n")
-
-		sb.WriteString("在最终判断前，请重新考虑: 如果以最善意的合理方式解读该话语，判断是否会改变？如果会，倾向于判定为非错误。\n")
-		sb.WriteString("阈值规则: 只有当一个合理的中立读者可能会感知到人际不适时，才标记为失误。\n\n")
-
+		sb.WriteString("- 只检测真正的语用失误，不纠正语法错误或风格问题\n")
+		sb.WriteString("- 只有当话语可能导致交际失败或冒犯时才标记错误\n")
+		sb.WriteString("- 平等关系中的直接表达通常是可以接受的\n")
+		sb.WriteString("- suggestion 字段只包含修改后的句子，不包含任何解释或前缀\n")
+		sb.WriteString("- 不要包含任何替代选项如 \"或更自然的...\"\n")
+		sb.WriteString("- 不要在 suggestion 中包含任何解释——把解释放在 explanation 字段\n")
+		sb.WriteString("- 只输出最佳的单一修改句子，别的什么都不要\n\n")
 	} else {
-		// 英文 prompt
-		sb.WriteString("You are a linguistics expert in pragmatics and intercultural communication.\n")
-		sb.WriteString("Your task is to analyze an utterance in an online chat between equal-status interlocutors (e.g., classmates or strangers).\n\n")
+		// 非中文消息用英文 prompt
+		sb.WriteString("You are a linguistics expert specializing in pragmatics and cross-cultural communication.\n")
+		sb.WriteString("Your task is to analyze utterances between equal-status interlocutors (e.g., classmates or strangers) in online chat.\n\n")
 
 		sb.WriteString("Important constraints:\n")
-		sb.WriteString("- Do NOT assume that an error exists.\n")
-		sb.WriteString("- Do NOT be overly sensitive to minor grammatical issues.\n")
-		sb.WriteString("- Minor wording imperfections that do not affect interpersonal meaning should NOT be treated as pragmatic failure.\n")
-		sb.WriteString("- Focus only on meaningful interpersonal impact.\n\n")
-
-		// 对话双方信息
-		sb.WriteString("Cultural background of the interlocutors:\n")
-		sb.WriteString(fmt.Sprintf("- Sender: %s, Country: %s\n", sender.Username, getCountryName(sender.Country)))
-		sb.WriteString(fmt.Sprintf("- Receiver: %s, Country: %s\n\n", receiver.Username, getCountryName(receiver.Country)))
-
-		// 对话历史 (最多5条)
-		if len(history) > 0 {
-			sb.WriteString("Chat history (as background context):\n")
-			limit := len(history)
-			if limit > 5 {
-				limit = 5
-			}
-			for i := limit - 1; i >= 0; i-- {
-				msg := history[i]
-				speaker := "Sender"
-				if msg.SenderID == receiver.ID {
-					speaker = "Receiver"
-				}
-				sb.WriteString(fmt.Sprintf("- [%s]: %s\n", speaker, msg.Content))
-			}
-			sb.WriteString("\n")
-		}
-
-		// 当前消息
-		sb.WriteString(fmt.Sprintf("Utterance to analyze (judge ONLY this one): \"%s\"\n\n", current.Content))
-
-		// 分析步骤
-		sb.WriteString("Analysis steps:\n\n")
-
-		sb.WriteString("Step 1: Determine whether the utterance contains impoliteness.\n")
-		sb.WriteString("Impoliteness is defined as:\n")
-		sb.WriteString("- Clear face-threatening acts without mitigation\n")
-		sb.WriteString("- Overtly rude, dismissive, aggressive, or demeaning tone\n")
-		sb.WriteString("- Strong norm violation in equal-status online interaction\n")
-		sb.WriteString("Minor directness alone is NOT automatically impoliteness.\n\n")
-
-		sb.WriteString("Step 2: Determine whether the utterance contains pragmatic failure.\n")
-		sb.WriteString("A. Pragmalinguistic failure:\n")
-		sb.WriteString("- Inappropriate linguistic forms used to express an intended meaning\n")
-		sb.WriteString("- Misuse of conventional expressions (e.g., requests, apologies, refusals)\n")
-		sb.WriteString("- Lexical or grammatical choices that unintentionally distort interpersonal meaning\n")
-		sb.WriteString("- Form-function mismatch\n")
-		sb.WriteString("Minor grammatical errors that do NOT affect interpersonal meaning should NOT be counted.\n\n")
-
-		sb.WriteString("B. Sociopragmatic failure:\n")
-		sb.WriteString("- Violation of social norms appropriate for equal-status online interaction\n")
-		sb.WriteString("- Inappropriate level of directness, formality, or mitigation\n")
-		sb.WriteString("- Misjudgment of interpersonal distance or relational expectations\n")
-		sb.WriteString("- Expressions that would reasonably cause interpersonal discomfort\n")
-		sb.WriteString("Directness alone is NOT automatically a violation unless it clearly exceeds reasonable expectations.\n\n")
-
-		sb.WriteString("Step 3: Based on the combination, provide evaluation:\n")
-		sb.WriteString("- If both failures are No → overall_evaluation: \"good\"\n")
-		sb.WriteString("- If only one type is Yes → overall_evaluation: \"improvable\", with a brief suggestion\n")
-		sb.WriteString("- If both types are Yes → overall_evaluation: \"problematic\", with a revised version\n")
-		sb.WriteString("Exception rule: If either failure is extremely severe (clearly offensive, strongly face-threatening, or causing serious meaning distortion), classify as \"problematic\"\n\n")
-
-		sb.WriteString("Before finalizing your judgment, reconsider whether your decision would change if the utterance were interpreted in the most charitable reasonable way. If yes, adjust toward non-error.\n")
-		sb.WriteString("Threshold rule: Only mark as failure if a reasonable neutral reader would likely perceive interpersonal discomfort.\n\n")
+		sb.WriteString("- Only detect genuine pragmatic failures, not grammatical errors or style issues\n")
+		sb.WriteString("- Only flag errors when an utterance may cause communication breakdown or offense\n")
+		sb.WriteString("- Direct expression in equal-status relationships is usually acceptable\n")
+		sb.WriteString("- The suggestion field should only contain the corrected sentence, no explanation or prefix\n")
+		sb.WriteString("- Do NOT include alternative options like \"or alternatively...\"\n")
+		sb.WriteString("- Do NOT include any explanation in the suggestion field\n")
+		sb.WriteString("- Just output the single best corrected sentence, nothing else\n\n")
 	}
 
-	// JSON 格式要求 (统一使用英文字段名, 便于解析)
-	sb.WriteString("Return ONLY the following JSON, no other content:\n")
+	// 聊天历史
+	if len(history) > 0 {
+		if isChineseMsg {
+			sb.WriteString("最近聊天记录（从旧到新）:\n")
+		} else {
+			sb.WriteString("Recent chat history (oldest first):\n")
+		}
+		for i := len(history) - 1; i >= 0; i-- {
+			msg := history[i]
+			var senderName string
+			if msg.Sender.ID == sender.ID {
+				senderName = "Sender"
+			} else {
+				senderName = "Receiver"
+			}
+			sb.WriteString(fmt.Sprintf("[%s]: %s\n", senderName, msg.Content))
+		}
+		sb.WriteString("\n")
+	}
+
+	// 当前待分析消息
+	if isChineseMsg {
+		sb.WriteString(fmt.Sprintf("发送者来自: %s\n", getCountryName(sender.Country)))
+		sb.WriteString(fmt.Sprintf("接收者来自: %s\n", getCountryName(receiver.Country)))
+		sb.WriteString(fmt.Sprintf("待分析消息: \"%s\"\n\n", current.Content))
+	} else {
+		sb.WriteString(fmt.Sprintf("Sender's country: %s\n", getCountryName(sender.Country)))
+		sb.WriteString(fmt.Sprintf("Receiver's country: %s\n", getCountryName(receiver.Country)))
+		sb.WriteString(fmt.Sprintf("Message to analyze: \"%s\"\n\n", current.Content))
+	}
+
+	// JSON 格式要求
+	if isChineseMsg {
+		sb.WriteString("请以以下 JSON 格式分析（不要包含 markdown 代码块，只输出纯 JSON）:\n")
+	} else {
+		sb.WriteString("Analyze and respond in the following JSON format (no markdown code blocks, pure JSON only):\n")
+	}
+
 	sb.WriteString("{\n")
 	sb.WriteString("  \"has_error\": true/false,\n")
 	sb.WriteString("  \"impoliteness\": true/false,\n")
 	sb.WriteString("  \"linguistic_pragmatic_failure\": true/false,\n")
 	sb.WriteString("  \"social_pragmatic_failure\": true/false,\n")
-	sb.WriteString("  \"overall_evaluation\": \"good\" / \"improvable\" / \"problematic\",\n")
-	sb.WriteString("  \"suggestion\": \"suggested revision or improvement\",\n")
-	sb.WriteString("  \"explanation\": \"detailed explanation of the pragmatic issue\"\n")
+	sb.WriteString("  \"overall_evaluation\": \"good\"/\"improvable\"/\"problematic\",\n")
+	sb.WriteString("  \"suggestion\": \"corrected sentence in the SAME language as the original message\",\n")
+	sb.WriteString("  \"explanation\": \"detailed explanation\"\n")
 	sb.WriteString("}\n\n")
 
-	sb.WriteString("CRITICAL RULE for the \"suggestion\" field:\n")
-	sb.WriteString("- The \"suggestion\" field must contain ONLY the corrected/improved complete sentence that the user should say.\n")
-	sb.WriteString("- Do NOT include any prefix like \"改为\", \"修改为\", \"Change to\", \"Try\", \"Revised\" etc.\n")
-	sb.WriteString("- Do NOT include alternative options like \"或更自然的...\", \"or alternatively...\".\n")
-	sb.WriteString("- Do NOT include any explanation in the suggestion field - put explanations in the \"explanation\" field.\n")
-	sb.WriteString("- Just output the single best corrected sentence, nothing else.\n")
+	if isChineseMsg {
+		sb.WriteString("如果没有语用失误，返回:\n")
+		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
+		// 【Fix】suggestion 与原消息同语言（中文），explanation 用接收者母语
+		var suggestionLangNote string
+		switch msgLang {
+		case "zh":
+			suggestionLangNote = "suggestion 字段必须用中文（与原消息语言相同）。"
+		case "ja":
+			suggestionLangNote = "The suggestion field must be in Japanese / 日本語（same language as the original message）."
+		case "ko":
+			suggestionLangNote = "The suggestion field must be in Korean / 한국어（same language as the original message）."
+		default: // "en" 及其他
+			suggestionLangNote = "The suggestion field must be in English (same language as the original message)."
+		}
 
-	sb.WriteString("If no pragmatic failure is detected, return:\n")
-	sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
+		var explanationLangNote string
+		switch sender.Country {
+		case "CN", "TW", "HK", "SG":
+			explanationLangNote = "explanation 字段必须用中文（发送者的母语）。"
+		case "JP":
+			explanationLangNote = "The explanation field must be in Japanese / 日本語（sender's native language）."
+		case "KR":
+			explanationLangNote = "The explanation field must be in Korean / 한국어（sender's native language）."
+		default:
+			explanationLangNote = fmt.Sprintf("The explanation field must be in %s (sender's native language).", sender.Country)
+		}
 
-	// 语言选择提醒
-	if isChineseSender {
-		sb.WriteString("重要提醒: suggestion 和 explanation 字段请用中文回复。\n")
+		if msgLang == "zh" {
+			sb.WriteString(fmt.Sprintf("重要提醒: %s %s\n", suggestionLangNote, explanationLangNote))
+		} else {
+			sb.WriteString(fmt.Sprintf("IMPORTANT: %s %s\n", suggestionLangNote, explanationLangNote))
+		}
 	} else {
-		sb.WriteString("Important: Please write the suggestion and explanation fields in English.\n")
+		sb.WriteString("If no pragmatic failure is detected, return:\n")
+		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
+		// 【Fix】suggestion 与原消息同语言
+		var suggestionLangNote string
+		switch msgLang {
+		case "zh":
+			suggestionLangNote = "suggestion 字段必须用中文（与原消息语言相同）。"
+		case "ja":
+			suggestionLangNote = "The suggestion field must be in Japanese / 日本語（same language as the original message）."
+		case "ko":
+			suggestionLangNote = "The suggestion field must be in Korean / 한국어（same language as the original message）."
+		default: // "en" 及其他
+			suggestionLangNote = "The suggestion field must be in English (same language as the original message)."
+		}
+
+		var explanationLangNote string
+		switch sender.Country {
+		case "CN", "TW", "HK", "SG":
+			explanationLangNote = "explanation 字段必须用中文（发送者的母语）。"
+		case "JP":
+			explanationLangNote = "The explanation field must be in Japanese / 日本語（sender's native language）."
+		case "KR":
+			explanationLangNote = "The explanation field must be in Korean / 한국어（sender's native language）."
+		default:
+			explanationLangNote = fmt.Sprintf("The explanation field must be in %s (sender's native language).", sender.Country)
+		}
+
+		if msgLang == "zh" {
+			sb.WriteString(fmt.Sprintf("重要提醒: %s %s\n", suggestionLangNote, explanationLangNote))
+		} else {
+			sb.WriteString(fmt.Sprintf("IMPORTANT: %s %s\n", suggestionLangNote, explanationLangNote))
+		}
 	}
 
 	return sb.String()
@@ -406,9 +381,12 @@ func buildReceiverExplanationPrompt(originalText, senderExplanation, errorType s
 
 	if isChineseReceiver {
 		sb.WriteString("用1-2句友善自然的中文说明语用问题及文化差异背景。不要重复原消息，不要使用技术性术语。只输出那1-2句话。")
+		sb.WriteString("告诉对方这可能是因为语言或文化差异导致的，不要让对方觉得发送者故意冒犯或不礼貌。")
 	} else {
 		sb.WriteString("Write 1-2 friendly natural sentences explaining the pragmatic issue and cultural context. " +
 			"Do NOT use technical linguistic terms. Output only those sentences.")
+		sb.WriteString("Make sure to convey that this may be due to language or cultural differences, " +
+			"and not to make the receiver feel that the sender is intentionally offensive or impolite.")
 	}
 
 	return sb.String()
@@ -420,10 +398,7 @@ func generateReceiverExplanation(originalText, senderExplanation, errorType stri
 		return ""
 	}
 
-	apiKey := os.Getenv("DASHSCOPE_API_KEY")
-	if apiKey == "" {
-		return senderExplanation
-	}
+	apiKey := "sk-8ab77da79b894ba6beb61c9190c74602"
 
 	prompt := buildReceiverExplanationPrompt(originalText, senderExplanation, errorType, sender, receiver)
 
@@ -565,6 +540,79 @@ func getCountryName(countryCode string) string {
 		return name
 	}
 	return countryCode
+}
+
+// ============================================================================
+// 【修改说明】修改 buildCombinedPrompt 函数中的语言判断逻辑
+//
+// 原逻辑：基于 sender.Country == "CN" 判断语言
+// 新逻辑：检测消息内容的实际语言（中文/日文/韩文/英文等）
+//   - suggestion 字段：与消息内容同语言（外国人说中文 → suggestion 用中文）
+//   - explanation 字段：用接收者的母语（或发送者的母语），方便双方理解
+// ============================================================================
+
+// detectMessageLanguage 检测消息的主要语言
+// 返回 "zh"（中文）、"ja"（日文）、"ko"（韩文）或 "en"（英文及其他）
+// detectMessageLanguage 检测消息的主要语言
+// 返回 "zh"（中文）、"ja"（日文）、"ko"（韩文）或 "en"（英文及其他）
+func detectMessageLanguage(content string) string {
+	chineseCount := 0
+	japaneseCount := 0
+	koreanCount := 0
+	totalLetters := 0
+
+	for _, r := range content {
+		if (r >= 0x4E00 && r <= 0x9FFF) || (r >= 0x3400 && r <= 0x4DBF) {
+			// CJK 汉字（中文为主，日文汉字也在此范围，但平假名/片假名更有区分力）
+			chineseCount++
+			totalLetters++
+		} else if (r >= 0x3040 && r <= 0x309F) || (r >= 0x30A0 && r <= 0x30FF) {
+			// 平假名或片假名 → 日文特征
+			japaneseCount++
+			totalLetters++
+		} else if r >= 0xAC00 && r <= 0xD7AF {
+			// 韩文音节
+			koreanCount++
+			totalLetters++
+		} else if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+			totalLetters++
+		}
+	}
+
+	if totalLetters == 0 {
+		return "en"
+	}
+
+	// 日文优先判断（因为日文也含汉字，但有假名）
+	if japaneseCount > 0 {
+		return "ja"
+	}
+	if koreanCount > 0 {
+		return "ko"
+	}
+	threshold := totalLetters / 4 // 超过1/4汉字视为中文
+	if chineseCount > threshold {
+		return "zh"
+	}
+	return "en"
+}
+
+// getExplanationLanguage 根据国家代码返回语言名称（供 prompt 中说明用）
+func getExplanationLanguage(countryCode string) string {
+	switch countryCode {
+	case "CN", "TW", "HK", "SG":
+		return "Chinese (中文)"
+	case "JP":
+		return "Japanese (日本語)"
+	case "KR":
+		return "Korean (한국어)"
+	case "FR":
+		return "French (Français)"
+	case "DE":
+		return "German (Deutsch)"
+	default:
+		return "English"
+	}
 }
 
 // notifyUser 通知发送方 (通过 WebSocket)

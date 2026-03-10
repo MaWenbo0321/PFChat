@@ -102,11 +102,13 @@ func realtimeCheck(c *gin.Context) {
 			overallEvaluation = "improvable"
 		}
 	}
-	// 检查是否已存在相同的错误记录（避免重复保存）
+
+	// 【Bug Fix】检查是否已存在相同的错误记录（避免重复保存）
+	// 原来的 WHERE 条件有 3 个占位符但只传了 2 个参数，缺少 sixtySecondsAgo
 	var existingError GrammarError
 	sixtySecondsAgo := time.Now().Add(-60 * time.Second)
 	duplicateCheck := db.Where(
-		"user_id = ? AND original_text = ? AND message_id = 0",
+		"user_id = ? AND original_text = ? AND message_id = 0 AND created_at > ?",
 		userID, req.Content, sixtySecondsAgo,
 	).Order("created_at DESC").First(&existingError)
 
@@ -129,6 +131,7 @@ func realtimeCheck(c *gin.Context) {
 		})
 		return
 	}
+
 	// 保存到数据库
 	grammarError := GrammarError{
 		UserID:         userID,

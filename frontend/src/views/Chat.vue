@@ -163,7 +163,13 @@
                 </span>
               </div>
               <div class="status-right">
-                <el-button type="primary" :icon="Promotion" @click="sendMessage" :disabled="!messageInput.trim()" size="small">
+                <el-button
+                    type="primary"
+                    :icon="Promotion"
+                    @click="sendMessage"
+                    :disabled="!messageInput.trim() || isSending"
+                    size="small"
+                >
                   {{ $t('chat.send') }}
                 </el-button>
               </div>
@@ -267,7 +273,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { debounce } from 'lodash-es'
+
 import {
   SwitchButton, Document, Promotion, Connection, Delete, MoreFilled,
   WarningFilled, CircleCheckFilled, Loading, ChatDotRound, ArrowLeft, ArrowRight
@@ -296,6 +302,7 @@ const inputErrors = ref([])
 const lastCheckTime = ref(null)
 let debounceTimer = null
 let lastCheckedContent = ''
+const isSending = ref(false)
 
 // ===================== 接收方消息错误标识 =====================
 const messageErrors = ref({}) // { messageId: { error_type, suggestion, explanation } }
@@ -378,8 +385,14 @@ const renderedUnderlineHtml = computed(() => {
 
 // ===================== 生命周期 =====================
 onMounted(async () => {
+  // 【Fix】用 connect() 而不是每次都新建连接
+  // 新的 websocket.js 中 connect() 已内置"若已连接则跳过"的防重复逻辑
   wsManager.connect()
-  // 【Fix】恢复当前用户的草稿（从 GrammarErrors 返回时）
+
+  // 【Fix】注册 wsHandler，接收 grammar_check / receiver_error_notify 通知
+  wsManager.onMessage(wsHandler)
+
+  // 恢复当前用户的草稿（从 GrammarErrors 返回时）
   if (chatStore.currentUser) {
     messageInput.value = chatStore.getDraft(chatStore.currentUser.id)
   }
@@ -393,7 +406,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  wsManager.disconnect()
+  wsManager.offMessage(wsHandler)
   if (debounceTimer) clearTimeout(debounceTimer)
 })
 
@@ -455,6 +468,16 @@ const loadMessageErrors = async () => {
   } catch (e) {
     // 静默处理
     console.error('Load message errors:', e)
+  }
+}
+
+// ===================== WebSocket 消息处理 =====================
+const wsHandler = (message) => {
+  // grammar_check: 发送方收到自己消息的检测结果
+  // receiver_error_notify: 接收方收到对方消息有语用错误的通知
+  if (message.type === 'grammar_check' || message.type === 'receiver_error_notify') {
+    // 重新从后端拉取当前会话的消息错误标识
+    loadMessageErrors()
   }
 }
 
@@ -521,52 +544,51 @@ const performCheck = async () => {
 }
 
 // ===================== 发送消息 =====================
-const sendMessage = debounce(async () => {
+const sendMessage = async () => {
+  if (isSending.value) return
   if (!messageInput.value.trim() || !chatStore.currentUser) return
 
-  const content = messageInput.value.trim()
-  const receiverId = chatStore.currentUser.id
-
-  // 【修复2】发送前先执行一次即时检测，确保 inputErrors 是最新的
-  if (content !== lastCheckedContent) {
-    await performCheck()
-  }
-
-  // 如果有检测到错误, 弹窗确认
-  if (inputErrors.value.length > 0) {
-    try {
-      await ElMessageBox.confirm(
-          t('chat.sendWithErrorsConfirm'),
-          t('chat.warning'),
-          {
-            confirmButtonText: t('chat.sendAnyway'),
-            cancelButtonText: t('common.cancel'),
-            type: 'warning'
-          }
-      )
-    } catch {
-      return // 用户取消
-    }
-  }
-
+  isSending.value = true
   try {
+    const content = messageInput.value.trim()
+    const receiverId = chatStore.currentUser.id
+
+    if (content !== lastCheckedContent) {
+      await performCheck()
+    }
+
+    if (inputErrors.value.length > 0) {
+      try {
+        await ElMessageBox.confirm(
+            t('chat.sendWithErrorsConfirm'),
+            t('chat.warning'),
+            {
+              confirmButtonText: t('chat.sendAnyway'),
+              cancelButtonText: t('common.cancel'),
+              type: 'warning'
+            }
+        )
+      } catch {
+        return
+      }
+    }
+
     const errorRecordId = inputErrors.value.length > 0 && inputErrors.value[0].error_record_id
         ? inputErrors.value[0].error_record_id
         : 0
 
-    const sentMessage = await api.sendMessage({  // 【修复1】拿到返回值
+    const sentMessage = await api.sendMessage({
       receiver_id: receiverId,
       content: content,
       error_record_id: errorRecordId
     })
 
-    // 【修复1】立即将消息加入 store，不依赖 WebSocket 回推
     if (sentMessage && sentMessage.id) {
       chatStore.addMessage(receiverId, sentMessage)
     }
 
     messageInput.value = ''
-    chatStore.clearDraft(receiverId)  // 【Fix】
+    chatStore.clearDraft(receiverId)
     inputErrors.value = []
     lastCheckedContent = ''
     lastCheckTime.value = null
@@ -574,8 +596,10 @@ const sendMessage = debounce(async () => {
   } catch (error) {
     console.error('Send message error:', error)
     ElMessage.error(t('chat.sendFailed'))
+  } finally {
+    isSending.value = false
   }
-}, 500, { leading: true, trailing: false })
+}
 
 // ===================== 应用建议 =====================
 const applySuggestion = (error) => {
@@ -907,7 +931,9 @@ const formatMessageTime = (timestamp) => {
 }
 
 .error-tooltip-content {
-  max-width: 300px;
+  max-width: 320px;
+  max-height: 300px;
+  overflow-y: auto;
 }
 .error-tooltip-header {
   margin-bottom: 8px;
@@ -930,12 +956,18 @@ const formatMessageTime = (timestamp) => {
   padding: 6px 8px;
   background: #f0f9eb;
   border-radius: 4px;
+  word-break: break-word;
+  line-height: 1.6;
 }
 .error-tooltip-text.explanation {
   color: #606266;
   padding: 6px 8px;
   background: #f4f4f5;
   border-radius: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+  word-break: break-word;
+  line-height: 1.6;
 }
 
 /* ===================== Grammarly 风格输入区域 ===================== */
@@ -1173,5 +1205,7 @@ const formatMessageTime = (timestamp) => {
 /* 全局 tooltip 样式 */
 .error-tooltip-popper {
   max-width: 360px !important;
+  max-height: 420px !important;
+  overflow: hidden !important;
 }
 </style>

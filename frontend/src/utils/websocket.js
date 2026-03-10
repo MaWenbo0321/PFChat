@@ -10,9 +10,17 @@ class WebSocketManager {
         this.reconnectAttempts = 0
         this.maxReconnectAttempts = 5
         this.messageHandlers = []
+        // 【Fix】标记是否为主动断开（logout 时触发），主动断开不触发重连
+        this.manualDisconnect = false
     }
 
     connect() {
+        // 【Fix】如果已有连接且状态正常，不重复连接（防止重复挂载时建立多条连接）
+        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+            console.log('WebSocket already connected or connecting, skip')
+            return
+        }
+
         const userStore = useUserStore()
         const token = userStore.token
 
@@ -20,6 +28,8 @@ class WebSocketManager {
             console.error('No token found, cannot connect WebSocket')
             return
         }
+
+        this.manualDisconnect = false
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
         const wsUrl = `${protocol}//8.148.76.156:8080/ws?token=${token}`
@@ -47,12 +57,18 @@ class WebSocketManager {
             console.error('WebSocket error:', error)
         }
 
-        this.ws.onclose = () => {
-            console.log('WebSocket disconnected')
-            const chatStore = useChatStore()
-            chatStore.closeWebSocket()
+        this.ws.onclose = (event) => {
+            console.log('WebSocket disconnected, code:', event.code, 'manual:', this.manualDisconnect)
             this.stopHeartbeat()
-            this.attemptReconnect()
+
+            // 【Fix】通知 chatStore 连接断开，但不调用 ws.close()（连接已经关了）
+            const chatStore = useChatStore()
+            chatStore.setConnected(false)
+
+            // 【Fix】只有非主动断开才触发重连（避免 logout / 页面卸载时的无效重连）
+            if (!this.manualDisconnect) {
+                this.attemptReconnect()
+            }
         }
     }
 
@@ -69,7 +85,6 @@ class WebSocketManager {
 
                 chatStore.addMessage(otherUserId, msg)
 
-                // 如果不是当前聊天用户发的消息,显示通知
                 if (chatStore.currentUser?.id !== otherUserId) {
                     ElMessage.info(`${msg.sender.username} 发来新消息`)
                 }
@@ -77,14 +92,12 @@ class WebSocketManager {
             }
 
             case 'grammar_check': {
-                // 🆕 不再使用弹窗, 只触发消息刷新让 Chat.vue 中的 loadMessageErrors 重新加载
-                // 通过 handlers 通知 Chat.vue 刷新
+                // 通过 handlers 通知 Chat.vue 刷新错误标识
                 break
             }
 
             case 'receiver_error_notify': {
-                // 🆕 接收方错误通知: 不弹窗, 只通知刷新
-                // 消息旁边会显示小标识, 无需弹窗
+                // 通过 handlers 通知 Chat.vue 刷新错误标识
                 break
             }
         }
@@ -101,7 +114,10 @@ class WebSocketManager {
 
     onMessage(handler) {
         if (typeof handler === 'function') {
-            this.messageHandlers.push(handler)
+            // 【Fix】防止重复注册同一个 handler 引用
+            if (!this.messageHandlers.includes(handler)) {
+                this.messageHandlers.push(handler)
+            }
         }
     }
 
@@ -123,6 +139,7 @@ class WebSocketManager {
     }
 
     startHeartbeat() {
+        this.stopHeartbeat() // 先清理旧定时器，防止重叠
         this.heartbeatTimer = setInterval(() => {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify({ type: 'ping' }))
@@ -138,31 +155,46 @@ class WebSocketManager {
     }
 
     attemptReconnect() {
+        // 【Fix】取消上一个待执行的重连定时器，防止叠加触发
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer)
+            this.reconnectTimer = null
+        }
+
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++
-            console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
+            const delay = 3000 * this.reconnectAttempts
+            console.log(`Reconnecting in ${delay}ms... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
 
             this.reconnectTimer = setTimeout(() => {
+                this.reconnectTimer = null
                 const userStore = useUserStore()
-                if (userStore.token) {
+                // 双重检查：token 存在且仍是非主动断开状态
+                if (userStore.token && !this.manualDisconnect) {
                     this.connect()
                 }
-            }, 3000 * this.reconnectAttempts)
+            }, delay)
         } else {
-            ElMessage.error('WebSocket 连接失败,请刷新页面重试')
+            ElMessage.error('WebSocket 连接失败，请刷新页面重试')
         }
     }
 
+    // 【Fix】logout 或页面彻底销毁时调用，完全断开不再重连
     disconnect() {
+        this.manualDisconnect = true
         this.stopHeartbeat()
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer)
+            this.reconnectTimer = null
         }
         if (this.ws) {
             this.ws.close()
             this.ws = null
         }
-        this.messageHandlers = []
+        this.reconnectAttempts = 0
+        // 【Fix 关键】不清空 messageHandlers！
+        // 原来此处有 this.messageHandlers = []，导致 Chat.vue 重新挂载后 handlers 丢失
+        // handlers 由各组件自己通过 offMessage 注销
     }
 }
 

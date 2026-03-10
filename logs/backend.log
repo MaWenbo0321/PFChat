@@ -1,4 +1,4 @@
-2026/03/02 16:20:12 Database connected and migrated
+2026/03/10 11:04:57 Database connected and migrated
 [GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
 
 [GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
@@ -28,597 +28,104 @@
 [GIN-debug] PUT    /api/admin/users/:id/role --> main.updateUserRole (6 handlers)
 [GIN-debug] GET    /api/admin/stats          --> main.getUserStats (6 handlers)
 [GIN-debug] GET    /ws                       --> main.main.func1 (4 handlers)
-2026/03/02 16:20:12 Server starting on :8080
+2026/03/10 11:04:57 Server starting on :8080
 [GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
 Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
 [GIN-debug] Listening and serving HTTP on 0.0.0.0:8080
-[GIN] 2026/03/02 - 16:33:04 | 200 |   68.944754ms |             ::1 | POST     "/api/login"
-[GIN] 2026/03/02 - 16:33:04 | 200 |    1.328623ms |             ::1 | GET      "/api/users"
-[GIN] 2026/03/02 - 16:33:04 | 200 |     210.668µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:33:04 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:33:06 | 200 |    7.696442ms |             ::1 | GET      "/api/messages/3"
-[GIN] 2026/03/02 - 16:33:06 | 200 |     903.224µs |             ::1 | POST     "/api/messages/errors"
-[GIN] 2026/03/02 - 16:33:06 | 200 |     915.716µs |             ::1 | POST     "/api/messages/errors"
-2026/03/02 16:33:25 LLM Response JSON: {
-  "has_error": false,
-  "impoliteness": false,
-  "linguistic_pragmatic_failure": false,
-  "social_pragmatic_failure": false,
-  "overall_evaluation": "good",
-  "suggestion": "",
-  "explanation": ""
-}
-[GIN] 2026/03/02 - 16:33:25 | 200 |  2.312513818s |             ::1 | POST     "/api/messages/realtime-check"
-2026/03/02 16:33:33 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:33:33 User 2 disconnected, total clients: 0
-[GIN] 2026/03/02 - 16:33:33 | 200 |    4.954232ms |             ::1 | GET      "/api/grammar-errors"
-2026/03/02 16:33:36 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:33:36 | 200 |     177.555µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-[GIN] 2026/03/02 - 16:33:43 | 200 |     5.91811ms |             ::1 | DELETE   "/api/grammar-errors/clear/all"
-[GIN] 2026/03/02 - 16:33:43 | 200 |     2.89314ms |             ::1 | GET      "/api/grammar-errors"
-2026/03/02 16:33:45 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:33:45 | 200 |     143.876µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-[GIN] 2026/03/02 - 16:33:45 | 200 |    1.014271ms |             ::1 | GET      "/api/users"
-2026/03/02 16:33:45 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:33:45 User 2 disconnected, total clients: 0
-[GIN] 2026/03/02 - 16:33:48 | 200 |     152.219µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:33:48 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:33:51 | 200 |      165.51µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:33:51 User 2 connected, total clients: 1
-2026/03/02 16:33:55 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:33:55 | 200 |     154.557µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:33:58 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:33:58 | 200 |     135.117µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:01 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:01 | 200 |     138.963µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:01 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:34:01 User 2 disconnected, total clients: 0
-[GIN] 2026/03/02 - 16:34:04 | 200 |     165.946µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:04 User 2 connected, total clients: 1
-2026/03/02 16:34:06 Received ping from user 2
-[GIN] 2026/03/02 - 16:34:07 | 200 |     171.417µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:07 User 2 connected, total clients: 1
-2026/03/02 16:34:07 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:34:07 User 2 disconnected, total clients: 0
-[GIN] 2026/03/02 - 16:34:10 | 200 |     119.921µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:10 User 2 connected, total clients: 1
-2026/03/02 16:34:12 LLM Response JSON: {
+[GIN] 2026/03/10 - 11:09:21 | 401 |     151.428µs |             ::1 | GET      "/api/users"
+[GIN] 2026/03/10 - 11:09:21 | 401 |     101.854µs | 221.231.170.177 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6InRlc3QiLCJyb2xlIjoidXNlciIsImV4cCI6MTc3Mjk2MDA1OSwiaWF0IjoxNzcyODczNjU5fQ.h2Fc4jY5Bg8-YDX0fr1JsJ_1ancrkmK9h6K3iVdm4fo"
+[GIN] 2026/03/10 - 11:09:32 | 200 |   69.497392ms |             ::1 | POST     "/api/login"
+2026/03/10 11:09:32 User 3 connected, total clients: 1
+[GIN] 2026/03/10 - 11:09:32 | 200 |     158.428µs | 221.231.170.177 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6InRlc3QiLCJyb2xlIjoidXNlciIsImV4cCI6MTc3MzE5ODU3MiwiaWF0IjoxNzczMTEyMTcyfQ.riDZA7BSB6TiEX-hYXB_DlSmAcvoeE8ZP8mHlVha5BE"
+[GIN] 2026/03/10 - 11:09:32 | 200 |     855.653µs |             ::1 | GET      "/api/users"
+[GIN] 2026/03/10 - 11:09:53 | 401 |      95.537µs |             ::1 | GET      "/api/users"
+[GIN] 2026/03/10 - 11:09:53 | 401 |      86.891µs | 221.231.170.177 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI5NjAxMTksImlhdCI6MTc3Mjg3MzcxOX0.HDMzkWwMrY5U1grwbbcL-z9IdKSZW1-2mY3uRSRjnkE"
+2026/03/10 11:10:02 Received ping from user 3
+2026/03/10 11:10:32 Received ping from user 3
+2026/03/10 11:11:02 Received ping from user 3
+2026/03/10 11:11:32 Received ping from user 3
+2026/03/10 11:12:02 Received ping from user 3
+2026/03/10 11:12:32 Received ping from user 3
+2026/03/10 11:13:02 Received ping from user 3
+2026/03/10 11:13:32 Received ping from user 3
+2026/03/10 11:14:02 Received ping from user 3
+2026/03/10 11:14:32 Received ping from user 3
+2026/03/10 11:15:02 Received ping from user 3
+2026/03/10 11:15:32 Received ping from user 3
+[GIN] 2026/03/10 - 11:15:48 | 200 |   69.308305ms |             ::1 | POST     "/api/login"
+[GIN] 2026/03/10 - 11:15:48 | 200 |    1.037816ms |             ::1 | GET      "/api/users"
+2026/03/10 11:15:48 User 2 connected, total clients: 2
+[GIN] 2026/03/10 - 11:15:48 | 200 |      95.891µs | 221.231.170.177 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzMxOTg5NDgsImlhdCI6MTc3MzExMjU0OH0.U8Nk8MIR_XGp5oIBvKJzTs7QInVx5i7_XadImFrCXE4"
+[GIN] 2026/03/10 - 11:15:54 | 200 |   17.350321ms |             ::1 | GET      "/api/messages/3"
+[GIN] 2026/03/10 - 11:15:54 | 200 |     1.19579ms |             ::1 | POST     "/api/messages/errors"
+[GIN] 2026/03/10 - 11:15:54 | 200 |    1.010681ms |             ::1 | POST     "/api/messages/errors"
+2026/03/10 11:16:02 Received ping from user 3
+2026/03/10 11:16:18 Received ping from user 2
+2026/03/10 11:16:32 Received ping from user 3
+2026/03/10 11:16:48 Received ping from user 2
+2026/03/10 11:17:02 Received ping from user 3
+2026/03/10 11:17:03 LLM Response JSON: {
   "has_error": true,
-  "impoliteness": false,
-  "linguistic_pragmatic_failure": true,
-  "social_pragmatic_failure": false,
-  "overall_evaluation": "improvable",
-  "suggestion": "Yes! I've eaten. How about you?",
-  "explanation": "‘I've eat’ 是动词形式错误（应为过去分词 eaten），虽属语法错误，但此处构成语用语言失误：该错误导致‘I've eat’在英语母语者听感中不自然、不地道，可能削弱话语的可接受性与人际亲和力；尤其在回应对方关心性问候（‘你吃饭了吗？’）时，形式不当会轻微弱化共情效果。但该错误未造成意义扭曲（仍可理解为已完成进食），也无冒犯或面子威胁，故不构成不礼貌或社会语用失误。修正为标准完成时形式即可恢复自然人际功能。"
-}
-
-2026/03/02 16:34:12 [31;1m/home/admin/PFChat/backend/grammar_handler.go:111 [35;1msql: expected 3 arguments, got 4
-[0m[33m[0.478ms] [34;1m[rows:0][0m SELECT * FROM `grammar_errors` WHERE user_id = 2 AND original_text = 'Yes! I''ve eat. How about you?' AND message_id = 0 ORDER BY created_at DESC,`grammar_errors`.`id` LIMIT '2026-03-02 16:33:12.238'
-[GIN] 2026/03/02 - 16:34:12 | 200 |  5.359351158s |             ::1 | POST     "/api/messages/realtime-check"
-2026/03/02 16:34:13 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:13 | 200 |     146.184µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:13 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:34:13 User 2 disconnected, total clients: 0
-2026/03/02 16:34:16 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:16 | 200 |     150.477µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:19 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:19 | 200 |     149.227µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:19 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:34:19 User 2 disconnected, total clients: 0
-[GIN] 2026/03/02 - 16:34:22 | 200 |     128.105µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:22 User 2 connected, total clients: 1
-2026/03/02 16:34:25 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:25 | 200 |      157.78µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:25 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:34:25 User 2 disconnected, total clients: 0
-2026/03/02 16:34:28 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:28 | 200 |     143.158µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:31 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:31 | 200 |     140.862µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:31 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:34:31 User 2 disconnected, total clients: 0
-2026/03/02 16:34:34 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:34 | 200 |     141.962µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:36 Received ping from user 2
-2026/03/02 16:34:37 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:37 | 200 |     139.647µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:38 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:34:38 User 2 disconnected, total clients: 0
-2026/03/02 16:34:41 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:41 | 200 |     136.227µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-[GIN] 2026/03/02 - 16:34:44 | 200 |     141.298µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:44 User 2 connected, total clients: 1
-2026/03/02 16:34:44 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:34:44 User 2 disconnected, total clients: 0
-2026/03/02 16:34:44 LLM Response JSON: {
-  "has_error": false,
-  "impoliteness": false,
-  "linguistic_pragmatic_failure": false,
-  "social_pragmatic_failure": false,
-  "overall_evaluation": "good",
-  "suggestion": "",
-  "explanation": ""
-}
-[GIN] 2026/03/02 - 16:34:44 | 200 |  2.455473065s |             ::1 | POST     "/api/messages/realtime-check"
-2026/03/02 16:34:44 User 3 not connected
-2026/03/02 16:34:44 User 2 not connected
-[GIN] 2026/03/02 - 16:34:44 | 200 |    7.489101ms |             ::1 | POST     "/api/messages"
-[GIN] 2026/03/02 - 16:34:44 | 200 |     920.417µs |             ::1 | POST     "/api/messages/errors"
-2026/03/02 16:34:45 LLM Response JSON: {
-  "has_error": false,
-  "impoliteness": false,
-  "linguistic_pragmatic_failure": false,
-  "social_pragmatic_failure": false,
-  "overall_evaluation": "good",
-  "suggestion": "",
-  "explanation": ""
-}
-[GIN] 2026/03/02 - 16:34:45 | 200 |  1.676034212s |             ::1 | POST     "/api/messages/realtime-check"
-2026/03/02 16:34:45 User 3 not connected
-2026/03/02 16:34:45 User 2 not connected
-[GIN] 2026/03/02 - 16:34:45 | 200 |    5.394604ms |             ::1 | POST     "/api/messages"
-[GIN] 2026/03/02 - 16:34:45 | 200 |     834.163µs |             ::1 | POST     "/api/messages/errors"
-[GIN] 2026/03/02 - 16:34:47 | 200 |     145.375µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:47 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:49 | 200 |    3.449011ms |             ::1 | DELETE   "/api/messages/6"
-[GIN] 2026/03/02 - 16:34:49 | 200 |    1.132142ms |             ::1 | POST     "/api/messages/errors"
-2026/03/02 16:34:50 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:50 | 200 |     142.647µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:50 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:34:50 User 2 disconnected, total clients: 0
-2026/03/02 16:34:53 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:53 | 200 |     131.425µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:56 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:56 | 200 |     180.332µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:34:58 Received ping from user 2
-2026/03/02 16:34:58 Received ping from user 2
-2026/03/02 16:34:59 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:34:59 | 200 |     145.114µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:02 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:35:02 | 200 |     149.966µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:02 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:35:02 User 2 disconnected, total clients: 0
-2026/03/02 16:35:05 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:35:05 | 200 |     136.856µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:06 Received ping from user 2
-2026/03/02 16:35:08 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:35:08 | 200 |     168.395µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:08 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:35:08 User 2 disconnected, total clients: 0
-[GIN] 2026/03/02 - 16:35:11 | 401 |     111.772µs |             ::1 | GET      "/api/users"
-[GIN] 2026/03/02 - 16:35:11 | 401 |      93.181µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6InRlc3QiLCJyb2xlIjoidXNlciIsImV4cCI6MTc3MjQzMDAzNSwiaWF0IjoxNzcyMzQzNjM1fQ.s9l4E4AnAWJAYarVvBvdx95M7JF4XhMhGfKJArIAzUo"
-2026/03/02 16:35:11 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:35:11 | 200 |     163.924µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-[GIN] 2026/03/02 - 16:35:14 | 200 |     164.749µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:14 User 2 connected, total clients: 1
-2026/03/02 16:35:16 Received ping from user 2
-2026/03/02 16:35:17 Received ping from user 2
-2026/03/02 16:35:17 User 2 connected, total clients: 1
-[GIN] 2026/03/02 - 16:35:17 | 200 |     116.162µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-[GIN] 2026/03/02 - 16:35:20 | 200 |   68.722594ms |             ::1 | POST     "/api/login"
-[GIN] 2026/03/02 - 16:35:20 | 200 |     997.811µs |             ::1 | GET      "/api/users"
-2026/03/02 16:35:20 User 3 connected, total clients: 2
-[GIN] 2026/03/02 - 16:35:20 | 200 |     129.623µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6InRlc3QiLCJyb2xlIjoidXNlciIsImV4cCI6MTc3MjUyNjkyMCwiaWF0IjoxNzcyNDQwNTIwfQ.V54-Qc1cyazt2Fn4mcRd0ec27yqDhdTzVa6RlhksRxA"
-2026/03/02 16:35:20 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:35:20 | 200 |     179.796µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:21 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:35:21 User 2 disconnected, total clients: 1
-[GIN] 2026/03/02 - 16:35:23 | 200 |    7.059493ms |             ::1 | GET      "/api/messages/2"
-[GIN] 2026/03/02 - 16:35:23 | 200 |    1.061769ms |             ::1 | POST     "/api/messages/errors"
-[GIN] 2026/03/02 - 16:35:23 | 200 |      822.92µs |             ::1 | POST     "/api/messages/errors"
-2026/03/02 16:35:24 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:35:24 | 200 |     174.281µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-[GIN] 2026/03/02 - 16:35:27 | 200 |     129.983µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:27 User 2 connected, total clients: 2
-2026/03/02 16:35:27 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:35:27 User 2 disconnected, total clients: 1
-[GIN] 2026/03/02 - 16:35:30 | 200 |     165.094µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:30 User 2 connected, total clients: 2
-2026/03/02 16:35:33 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:35:33 | 200 |     130.144µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:34 Received ping from user 2
-2026/03/02 16:35:35 Received ping from user 2
-2026/03/02 16:35:35 Received ping from user 2
-[GIN] 2026/03/02 - 16:35:36 | 200 |     129.116µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:36 User 2 connected, total clients: 2
-2026/03/02 16:35:36 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:35:36 User 2 disconnected, total clients: 1
-2026/03/02 16:35:39 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:35:39 | 200 |     195.535µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:40 Received ping from user 2
-2026/03/02 16:35:41 Received ping from user 2
-2026/03/02 16:35:42 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:35:42 | 200 |     140.132µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:42 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:35:42 User 2 disconnected, total clients: 1
-2026/03/02 16:35:45 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:35:45 | 200 |     138.976µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:46 Received ping from user 2
-2026/03/02 16:35:47 Received ping from user 2
-2026/03/02 16:35:47 Received ping from user 2
-[GIN] 2026/03/02 - 16:35:48 | 200 |     143.996µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:48 User 2 connected, total clients: 2
-2026/03/02 16:35:48 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:35:48 User 2 disconnected, total clients: 1
-2026/03/02 16:35:50 Received ping from user 3
-2026/03/02 16:35:51 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:35:51 | 200 |     154.806µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:52 Received ping from user 2
-2026/03/02 16:35:54 Received ping from user 2
-2026/03/02 16:35:54 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:35:54 | 200 |     139.096µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:54 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:35:54 User 2 disconnected, total clients: 1
-2026/03/02 16:35:57 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:35:57 | 200 |     131.156µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:35:58 Received ping from user 2
-2026/03/02 16:35:58 Received ping from user 2
-2026/03/02 16:35:59 Received ping from user 2
-2026/03/02 16:36:00 LLM Response JSON: {
-  "has_error": false,
-  "impoliteness": false,
-  "linguistic_pragmatic_failure": false,
-  "social_pragmatic_failure": false,
-  "overall_evaluation": "good",
-  "suggestion": "",
-  "explanation": ""
-}
-[GIN] 2026/03/02 - 16:36:00 | 200 |  1.723543398s |             ::1 | POST     "/api/messages/realtime-check"
-[GIN] 2026/03/02 - 16:36:00 | 200 |     133.908µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:00 User 2 connected, total clients: 2
-2026/03/02 16:36:00 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:36:00 User 2 disconnected, total clients: 1
-2026/03/02 16:36:03 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:03 | 200 |     142.167µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:04 Received ping from user 2
-2026/03/02 16:36:05 Received ping from user 2
-2026/03/02 16:36:05 Received ping from user 2
-2026/03/02 16:36:06 Received ping from user 2
-2026/03/02 16:36:06 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:06 | 200 |     170.204µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:06 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:36:06 User 2 disconnected, total clients: 1
-[GIN] 2026/03/02 - 16:36:10 | 200 |     571.004µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:10 User 2 connected, total clients: 2
-2026/03/02 16:36:10 Received ping from user 2
-2026/03/02 16:36:11 Received ping from user 2
-2026/03/02 16:36:13 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:13 | 200 |     150.496µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:13 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:36:13 User 2 disconnected, total clients: 1
-[GIN] 2026/03/02 - 16:36:16 | 200 |       163.9µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:16 User 2 connected, total clients: 2
-2026/03/02 16:36:16 Received ping from user 2
-2026/03/02 16:36:17 Received ping from user 2
-2026/03/02 16:36:17 Received ping from user 2
-2026/03/02 16:36:19 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:19 | 200 |     160.154µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:19 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:36:19 User 2 disconnected, total clients: 1
-2026/03/02 16:36:20 Received ping from user 3
-2026/03/02 16:36:22 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:22 | 200 |     160.362µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:22 Received ping from user 2
-2026/03/02 16:36:24 Received ping from user 2
-2026/03/02 16:36:25 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:25 | 200 |     117.524µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:27 Received ping from user 2
-2026/03/02 16:36:28 Received ping from user 2
-2026/03/02 16:36:28 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:28 | 200 |      151.53µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:28 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:36:28 User 2 disconnected, total clients: 1
-2026/03/02 16:36:31 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:31 | 200 |     149.282µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:33 Received ping from user 2
-2026/03/02 16:36:33 Received ping from user 2
-2026/03/02 16:36:34 Received ping from user 2
-2026/03/02 16:36:34 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:34 | 200 |     130.512µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:35 Received ping from user 2
-2026/03/02 16:36:35 Received ping from user 2
-2026/03/02 16:36:36 Received ping from user 2
-2026/03/02 16:36:37 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:37 | 200 |     142.155µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:38 LLM Response JSON: {
-  "has_error": true,
-  "impoliteness": false,
+  "impoliteness": true,
   "linguistic_pragmatic_failure": true,
   "social_pragmatic_failure": true,
-  "overall_evaluation": "improvable",
-  "suggestion": "I had noodles for lunch — they were delicious! Would you like to grab a meal together sometime?",
-  "explanation": "The original utterance '我吃了面条中午, 很好吃. 什么时间有空吃饭请你!' exhibits both pragmalinguistic and sociopragmatic issues. Pragmalinguistically, the word order '我吃了面条中午' is non-native and ambiguous (literal translation of 'I ate noodles noon'), obscuring temporal reference and sounding unnatural in English; more critically, '什么时间有空吃饭请你!' conflates two distinct pragmatic acts — checking availability ('what time are you free?') and offering to treat ('I’ll treat you') — without syntactic or discourse markers to coordinate them, resulting in a form-function mismatch that risks misinterpretation (e.g., as a vague or abrupt invitation rather than a warm, collaborative proposal). Sociopragmatically, while directness is not inherently impolite, the lack of mitigation (e.g., no hedging, no question intonation marker, no softening phrase like 'would you be open to...?' or 'maybe we could...?') and the abrupt shift from statement to invitation violates typical expectations for peer-level online rapport-building in both US and Chinese contexts, where mutual face-saving and collaborative framing are valued. A neutral reader would likely perceive mild interpersonal friction — not offense, but a subtle sense of awkwardness or effortful decoding — especially given the prior exchange involved self-correction ('i.ve eat' → 'Yes! I've eaten. How about you?'), signaling both parties’ orientation toward polite, co-constructed interaction. The suggested revision uses natural English syntax, clear sequential structure (statement → positive evaluation → collaborative invitation), appropriate mitigation ('Would you like...?'), and culturally congruent phrasing for equal-status peers."
+  "overall_evaluation": "problematic",
+  "suggestion": "You're so kind!",
+  "explanation": "‘You're so’ 是一个不完整的表达，在英语中属于截断式话语（truncated utterance），缺乏补足成分（如形容词或分词），导致语义不完整、语用模糊。在跨文化在线交流中，尤其在初识的平等关系中，这种不完整表达易被解读为敷衍、失礼、注意力不集中，甚至可能引发误解（例如被误认为是讽刺或未完成的批评）。结合上下文（双方刚互致问候并讨论共餐意愿），此处极可能意图表达正面评价（如‘kind’, ‘thoughtful’, ‘nice’），但省略核心谓词成分构成严重的语言-语用失败；同时因违反合作原则中的‘量准则’（提供足够信息）和礼貌原则，造成社交层面的冒犯风险。"
 }
 
-2026/03/02 16:36:38 [31;1m/home/admin/PFChat/backend/grammar_handler.go:111 [35;1msql: expected 3 arguments, got 4
-[0m[33m[0.524ms] [34;1m[rows:0][0m SELECT * FROM `grammar_errors` WHERE user_id = 3 AND original_text = '我吃了面条中午, 很好吃. 什么时间有空吃饭请你!' AND message_id = 0 ORDER BY created_at DESC,`grammar_errors`.`id` LIMIT '2026-03-02 16:35:38.004'
-[GIN] 2026/03/02 - 16:36:38 | 200 | 11.064065767s |             ::1 | POST     "/api/messages/realtime-check"
-2026/03/02 16:36:39 Received ping from user 2
-2026/03/02 16:36:40 Received ping from user 2
-2026/03/02 16:36:40 Received ping from user 2
-2026/03/02 16:36:40 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:40 | 200 |     152.238µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:40 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:36:40 User 2 disconnected, total clients: 1
-2026/03/02 16:36:43 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:43 | 200 |      145.78µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:45 Received ping from user 2
-2026/03/02 16:36:46 Received ping from user 2
-2026/03/02 16:36:46 Received ping from user 2
-2026/03/02 16:36:46 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:46 | 200 |     177.224µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:46 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:36:46 User 2 disconnected, total clients: 1
-2026/03/02 16:36:49 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:49 | 200 |     120.963µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:50 Received ping from user 3
-2026/03/02 16:36:51 Received ping from user 2
-2026/03/02 16:36:52 Received ping from user 2
-2026/03/02 16:36:52 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:52 | 200 |     150.664µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:52 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:36:52 User 2 disconnected, total clients: 1
-2026/03/02 16:36:56 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:36:56 | 200 |     122.031µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:57 Received ping from user 2
-2026/03/02 16:36:58 Received ping from user 2
-2026/03/02 16:36:58 Received ping from user 2
-[GIN] 2026/03/02 - 16:36:59 | 200 |     145.815µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:36:59 User 2 connected, total clients: 2
-2026/03/02 16:36:59 Received ping from user 2
-2026/03/02 16:37:02 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:02 | 200 |     148.036µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:02 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:37:02 User 2 disconnected, total clients: 1
-2026/03/02 16:37:05 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:05 | 200 |     145.955µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:05 Received ping from user 2
-2026/03/02 16:37:06 Received ping from user 2
-2026/03/02 16:37:07 Received ping from user 2
-[GIN] 2026/03/02 - 16:37:08 | 200 |     125.459µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:08 User 2 connected, total clients: 2
-2026/03/02 16:37:09 Received ping from user 2
-2026/03/02 16:37:10 Received ping from user 2
-2026/03/02 16:37:10 Received ping from user 2
-2026/03/02 16:37:11 Received ping from user 2
-[GIN] 2026/03/02 - 16:37:11 | 200 |     126.006µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:11 User 2 connected, total clients: 2
-2026/03/02 16:37:11 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:37:11 User 2 disconnected, total clients: 1
-2026/03/02 16:37:14 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:14 | 200 |     181.529µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:15 Received ping from user 2
-2026/03/02 16:37:16 Received ping from user 2
-2026/03/02 16:37:16 Received ping from user 2
-2026/03/02 16:37:17 Received ping from user 2
-[GIN] 2026/03/02 - 16:37:17 | 200 |     136.156µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:17 User 2 connected, total clients: 2
-2026/03/02 16:37:17 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:37:17 User 2 disconnected, total clients: 1
-2026/03/02 16:37:20 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:20 | 200 |     153.677µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:20 Received ping from user 3
-2026/03/02 16:37:21 Received ping from user 2
-2026/03/02 16:37:22 Received ping from user 2
-2026/03/02 16:37:23 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:23 | 200 |     130.038µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:23 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:37:23 User 2 disconnected, total clients: 1
-[GIN] 2026/03/02 - 16:37:26 | 200 |     179.321µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:26 User 2 connected, total clients: 2
-2026/03/02 16:37:27 Received ping from user 2
-2026/03/02 16:37:28 Received ping from user 2
-2026/03/02 16:37:28 Received ping from user 2
-2026/03/02 16:37:29 Received ping from user 2
-2026/03/02 16:37:29 Received ping from user 2
-2026/03/02 16:37:29 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:29 | 200 |     177.729µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:29 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:37:29 User 2 disconnected, total clients: 1
-[GIN] 2026/03/02 - 16:37:32 | 200 |     143.238µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:32 User 2 connected, total clients: 2
-2026/03/02 16:37:33 Received ping from user 2
-2026/03/02 16:37:33 Received ping from user 2
-2026/03/02 16:37:34 Received ping from user 2
-2026/03/02 16:37:35 Received ping from user 2
-2026/03/02 16:37:35 Received ping from user 2
-[GIN] 2026/03/02 - 16:37:35 | 200 |     157.867µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:35 User 2 connected, total clients: 2
-2026/03/02 16:37:35 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:37:35 User 2 disconnected, total clients: 1
-2026/03/02 16:37:38 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:38 | 200 |     127.585µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:39 Received ping from user 2
-2026/03/02 16:37:40 Received ping from user 2
-2026/03/02 16:37:40 Received ping from user 2
-2026/03/02 16:37:41 Received ping from user 2
-2026/03/02 16:37:42 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:42 | 200 |     165.783µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:42 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:37:42 User 2 disconnected, total clients: 1
-[GIN] 2026/03/02 - 16:37:45 | 200 |      115.73µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:45 User 2 connected, total clients: 2
-2026/03/02 16:37:45 Received ping from user 2
-2026/03/02 16:37:46 Received ping from user 2
-2026/03/02 16:37:46 Received ping from user 2
-2026/03/02 16:37:47 Received ping from user 2
-2026/03/02 16:37:47 Received ping from user 2
-2026/03/02 16:37:48 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:48 | 200 |     141.572µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:49 Received ping from user 2
-2026/03/02 16:37:50 Received ping from user 2
-2026/03/02 16:37:50 Received ping from user 3
-[GIN] 2026/03/02 - 16:37:51 | 200 |     123.821µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:51 User 2 connected, total clients: 2
-2026/03/02 16:37:51 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:37:51 User 2 disconnected, total clients: 1
-2026/03/02 16:37:54 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:54 | 200 |     169.285µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:55 Received ping from user 2
-2026/03/02 16:37:56 Received ping from user 2
-2026/03/02 16:37:57 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:37:57 | 200 |     138.842µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:37:57 Received ping from user 2
-2026/03/02 16:37:58 Received ping from user 2
-2026/03/02 16:37:58 Received ping from user 2
-2026/03/02 16:37:59 Received ping from user 2
-2026/03/02 16:37:59 Received ping from user 2
-[GIN] 2026/03/02 - 16:38:00 | 200 |     153.683µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:00 User 2 connected, total clients: 2
-2026/03/02 16:38:00 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:38:00 User 2 disconnected, total clients: 1
-2026/03/02 16:38:03 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:03 | 200 |     164.868µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:03 Received ping from user 2
-2026/03/02 16:38:04 Received ping from user 2
-2026/03/02 16:38:05 Received ping from user 2
-2026/03/02 16:38:05 Received ping from user 2
-[GIN] 2026/03/02 - 16:38:06 | 200 |     145.146µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:06 User 2 connected, total clients: 2
-2026/03/02 16:38:06 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:38:06 User 2 disconnected, total clients: 1
-[GIN] 2026/03/02 - 16:38:09 | 200 |     154.195µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:09 User 2 connected, total clients: 2
-2026/03/02 16:38:10 Received ping from user 2
-2026/03/02 16:38:10 Received ping from user 2
-2026/03/02 16:38:11 Received ping from user 2
-2026/03/02 16:38:12 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:12 | 200 |     136.537µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:13 Received ping from user 2
-2026/03/02 16:38:14 Received ping from user 2
-2026/03/02 16:38:15 Received ping from user 2
-[GIN] 2026/03/02 - 16:38:15 | 200 |     143.429µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:15 User 2 connected, total clients: 2
-2026/03/02 16:38:15 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:38:15 User 2 disconnected, total clients: 1
-2026/03/02 16:38:18 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:18 | 200 |     161.261µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:19 LLM Response JSON: {
-  "has_error": true,
+2026/03/10 11:17:03 [31;1m/home/admin/PFChat/backend/grammar_handler.go:113 [35;1mrecord not found
+[0m[33m[1.236ms] [34;1m[rows:0][0m SELECT * FROM `grammar_errors` WHERE user_id = 2 AND original_text = 'You''re so' AND message_id = 0 AND created_at > '2026-03-10 11:16:03.076' ORDER BY created_at DESC,`grammar_errors`.`id` LIMIT 1
+[GIN] 2026/03/10 - 11:17:03 | 200 |  6.613267374s |             ::1 | POST     "/api/messages/realtime-check"
+2026/03/10 11:17:06 LLM Response JSON: {
+  "has_error": false,
   "impoliteness": false,
+  "linguistic_pragmatic_failure": false,
+  "social_pragmatic_failure": false,
+  "overall_evaluation": "good",
+  "suggestion": "",
+  "explanation": ""
+}
+[GIN] 2026/03/10 - 11:17:06 | 200 |  1.617526947s |             ::1 | POST     "/api/messages/realtime-check"
+2026/03/10 11:17:12 Message sent to user 3
+2026/03/10 11:17:12 Message sent to user 2
+[GIN] 2026/03/10 - 11:17:12 | 200 |    5.087801ms |             ::1 | POST     "/api/messages"
+[GIN] 2026/03/10 - 11:17:12 | 200 |    1.267361ms |             ::1 | POST     "/api/messages/errors"
+[GIN] 2026/03/10 - 11:17:17 | 200 |    4.496081ms |             ::1 | GET      "/api/grammar-errors"
+2026/03/10 11:17:18 Received ping from user 2
+2026/03/10 11:17:32 Received ping from user 3
+[GIN] 2026/03/10 - 11:17:35 | 200 |     937.764µs |             ::1 | GET      "/api/users"
+[GIN] 2026/03/10 - 11:17:39 | 200 |    1.121214ms |             ::1 | POST     "/api/messages/errors"
+[GIN] 2026/03/10 - 11:17:39 | 200 |    6.518369ms |             ::1 | GET      "/api/messages/2"
+[GIN] 2026/03/10 - 11:17:39 | 200 |     940.514µs |             ::1 | POST     "/api/messages/errors"
+[GIN] 2026/03/10 - 11:17:39 | 200 |    1.961115ms |             ::1 | POST     "/api/messages/errors"
+2026/03/10 11:17:49 Received ping from user 2
+2026/03/10 11:18:02 Received ping from user 3
+2026/03/10 11:18:19 Received ping from user 2
+2026/03/10 11:18:23 LLM Response JSON: {
+  "has_error": true,
+  "impoliteness": true,
   "linguistic_pragmatic_failure": true,
   "social_pragmatic_failure": true,
-  "overall_evaluation": "improvable",
-  "suggestion": "I had noodles for lunch. When are you free to eat together?",
-  "explanation": "The original utterance '我吃了面条中午, 什么时间有空吃饭,请你?' exhibits both pragmalinguistic and sociopragmatic issues. Pragmalinguistically, the word order '我吃了面条中午' is non-native and ambiguous (literal translation of Chinese SVO+time adverbial structure), making the temporal reference unclear and potentially confusing — it could be misread as 'I ate noodles, noon' rather than 'I ate noodles at noon'. The phrase '请你?' at the end is a direct calque of Chinese '请你？' (literally 'please you?'), which functions in Chinese as a soft, face-saving request marker but has no conventional equivalent in English; in English, it sounds incomplete, grammatically ill-formed, and pragmatically odd — not a recognized request form. Sociopragmatically, the abrupt shift from reporting one's own meal to requesting shared dining without mitigation ('Would you like to...?', 'Are you free to...?', 'Maybe we could...?') or relational framing (e.g., 'I’d love to grab lunch with you sometime — when might work?') risks sounding transactional or presumptuous in an early-stage equal-status online interaction between US and Chinese interlocutors. While not impolite per se (no face-threatening aggression or dismissal), the combination reduces clarity and rapport-building potential. A neutral, charitable reader would likely perceive mild interpersonal awkwardness — not offense, but a missed opportunity for natural, cooperative phrasing."
+  "overall_evaluation": "problematic",
+  "suggestion": "不客气，不用这么见外，咱们是朋友嘛！",
+  "explanation": "The original utterance '你客气, 不需要的, 我们是友好的' commits multiple pragmatic failures in an equal-status interaction between a US sender and Chinese receiver. First, '你客气' is a direct translation of English 'You're welcome', but in Chinese, this phrase is typically used *after* the other person thanks you—not as a response to their expression of gratitude *and* kindness (which was 'You're so kind! Thanks!'). Second, '不需要的' sounds dismissive and overly blunt in this context; it undermines the receiver's polite gesture and risks conveying indifference or rejection of social bonding. Third, '我们是友好的' is linguistically odd and socially inappropriate: '友好的' describes a temporary attitude or demeanor, not a relationship status—using it to refer to the interpersonal relationship sounds unnatural, vaguely clinical, and fails to index the warmth or solidarity expected after mutual politeness exchanges. The suggested revision uses natural, relationally affirming Chinese ('咱们是朋友嘛！') with appropriate mitigation ('不用这么见外') and positive face support, aligning with both Chinese pragmatic norms for peer-level interactions and the cooperative tone established in the chat."
 }
 
-2026/03/02 16:38:19 [31;1m/home/admin/PFChat/backend/grammar_handler.go:111 [35;1msql: expected 3 arguments, got 4
-[0m[33m[0.471ms] [34;1m[rows:0][0m SELECT * FROM `grammar_errors` WHERE user_id = 3 AND original_text = '我吃了面条中午, 什么时间有空吃饭,请你?' AND message_id = 0 ORDER BY created_at DESC,`grammar_errors`.`id` LIMIT '2026-03-02 16:37:19.57'
-[GIN] 2026/03/02 - 16:38:19 | 200 | 10.732101424s |             ::1 | POST     "/api/messages/realtime-check"
-2026/03/02 16:38:19 Received ping from user 2
-2026/03/02 16:38:20 Received ping from user 2
-2026/03/02 16:38:20 Received ping from user 3
-2026/03/02 16:38:21 Received ping from user 2
-2026/03/02 16:38:21 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:21 | 200 |     123.591µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:23 Received ping from user 2
-2026/03/02 16:38:24 Received ping from user 2
-2026/03/02 16:38:25 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:25 | 200 |      119.97µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:25 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:38:25 User 2 disconnected, total clients: 1
-2026/03/02 16:38:28 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:28 | 200 |     139.005µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:28 Received ping from user 2
-2026/03/02 16:38:29 Received ping from user 2
-2026/03/02 16:38:29 已更新错误记录 24 的 message_id 为 7
-2026/03/02 16:38:29 Message sent to user 2
-2026/03/02 16:38:29 Message sent to user 3
-[GIN] 2026/03/02 - 16:38:29 | 200 |    9.133756ms |             ::1 | POST     "/api/messages"
-2026/03/02 16:38:29 Received ping from user 2
-[GIN] 2026/03/02 - 16:38:29 | 200 |    1.160896ms |             ::1 | POST     "/api/messages/errors"
-[GIN] 2026/03/02 - 16:38:29 | 200 |    3.381483ms |             ::1 | POST     "/api/messages/errors"
-2026/03/02 16:38:31 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:31 | 200 |     148.289µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:31 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:38:31 User 2 disconnected, total clients: 1
-[GIN] 2026/03/02 - 16:38:34 | 200 |     120.045µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:34 User 2 connected, total clients: 2
-2026/03/02 16:38:35 Received ping from user 2
-2026/03/02 16:38:35 Received ping from user 2
-2026/03/02 16:38:36 Received ping from user 2
-[GIN] 2026/03/02 - 16:38:37 | 200 |     133.401µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:37 User 2 connected, total clients: 2
-2026/03/02 16:38:37 Received ping from user 2
-2026/03/02 16:38:38 Received ping from user 2
-2026/03/02 16:38:39 Received ping from user 2
-2026/03/02 16:38:39 Received ping from user 2
-2026/03/02 16:38:40 Received ping from user 2
-2026/03/02 16:38:40 Received ping from user 2
-[GIN] 2026/03/02 - 16:38:40 | 200 |     158.434µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:40 User 2 connected, total clients: 2
-2026/03/02 16:38:40 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:38:40 User 2 disconnected, total clients: 1
-2026/03/02 16:38:43 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:43 | 200 |     190.153µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:43 Received ping from user 2
-2026/03/02 16:38:44 Received ping from user 2
-2026/03/02 16:38:45 Received ping from user 2
-2026/03/02 16:38:46 Received ping from user 2
-2026/03/02 16:38:46 Received ping from user 2
-[GIN] 2026/03/02 - 16:38:46 | 200 |     146.391µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:46 User 2 connected, total clients: 2
-2026/03/02 16:38:46 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:38:46 User 2 disconnected, total clients: 1
-2026/03/02 16:38:49 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:49 | 200 |     125.631µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:49 Received ping from user 2
-2026/03/02 16:38:50 Received ping from user 2
-2026/03/02 16:38:50 Received ping from user 3
-2026/03/02 16:38:51 Received ping from user 2
-2026/03/02 16:38:52 Received ping from user 2
-2026/03/02 16:38:52 Received ping from user 2
-[GIN] 2026/03/02 - 16:38:52 | 200 |     178.496µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:52 User 2 connected, total clients: 2
-2026/03/02 16:38:54 Received ping from user 2
-2026/03/02 16:38:55 Received ping from user 2
-2026/03/02 16:38:56 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:56 | 200 |     138.148µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:56 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:38:56 User 2 disconnected, total clients: 1
-2026/03/02 16:38:59 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:38:59 | 200 |     166.866µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:38:59 Received ping from user 2
-[GIN] 2026/03/02 - 16:39:02 | 200 |     140.382µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:39:02 User 2 connected, total clients: 2
-2026/03/02 16:39:02 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:39:02 User 2 disconnected, total clients: 1
-[GIN] 2026/03/02 - 16:39:05 | 200 |     149.412µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:39:05 User 2 connected, total clients: 2
-2026/03/02 16:39:05 Received ping from user 2
-2026/03/02 16:39:06 Received ping from user 2
-2026/03/02 16:39:07 Received ping from user 2
-2026/03/02 16:39:07 Received ping from user 2
-2026/03/02 16:39:08 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:39:08 | 200 |     139.427µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:39:08 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:39:08 User 2 disconnected, total clients: 1
-2026/03/02 16:39:11 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:39:11 | 200 |      130.39µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:39:12 Received ping from user 2
-2026/03/02 16:39:13 Received ping from user 2
-2026/03/02 16:39:13 Received ping from user 2
-2026/03/02 16:39:14 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:39:14 | 200 |     121.107µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:39:14 Received ping from user 2
-2026/03/02 16:39:15 Received ping from user 2
-2026/03/02 16:39:16 Received ping from user 2
-2026/03/02 16:39:16 Received ping from user 2
-2026/03/02 16:39:17 Received ping from user 2
-[GIN] 2026/03/02 - 16:39:17 | 200 |     118.001µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:39:17 User 2 connected, total clients: 2
-2026/03/02 16:39:17 WebSocket error for user 2: websocket: close 1005 (no status)
-2026/03/02 16:39:17 User 2 disconnected, total clients: 1
-2026/03/02 16:39:20 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:39:20 | 200 |     139.525µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:39:20 Received ping from user 2
-2026/03/02 16:39:20 Received ping from user 3
-2026/03/02 16:39:21 Received ping from user 2
-2026/03/02 16:39:22 Received ping from user 2
-2026/03/02 16:39:22 Received ping from user 2
-2026/03/02 16:39:22 Received ping from user 2
-2026/03/02 16:39:23 User 2 connected, total clients: 2
-[GIN] 2026/03/02 - 16:39:23 | 200 |     129.864µs |  112.53.146.181 | GET      "/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6Ik1hIFdlbmJvIiwicm9sZSI6InVzZXIiLCJleHAiOjE3NzI1MjY3ODQsImlhdCI6MTc3MjQ0MDM4NH0.YKG9uWVk3Dz9AFK7HQ_Tfni0HDAk1lYXG6LgmxTzdDk"
-2026/03/02 16:39:24 Received ping from user 2
-2026/03/02 16:39:25 Received ping from user 2
+2026/03/10 11:18:23 [31;1m/home/admin/PFChat/backend/grammar_handler.go:113 [35;1mrecord not found
+[0m[33m[0.911ms] [34;1m[rows:0][0m SELECT * FROM `grammar_errors` WHERE user_id = 3 AND original_text = '你客气, 不需要的, 我们是友好的' AND message_id = 0 AND created_at > '2026-03-10 11:17:23.19' ORDER BY created_at DESC,`grammar_errors`.`id` LIMIT 1
+[GIN] 2026/03/10 - 11:18:23 | 200 |  8.318052619s |             ::1 | POST     "/api/messages/realtime-check"
+2026/03/10 11:18:32 Received ping from user 3
+2026/03/10 11:18:49 Received ping from user 2
+2026/03/10 11:18:50 已更新错误记录 29 的 message_id 为 10
+2026/03/10 11:18:50 Message sent to user 2
+2026/03/10 11:18:50 Message sent to user 3
+[GIN] 2026/03/10 - 11:18:50 | 200 |    8.157796ms |             ::1 | POST     "/api/messages"
+[GIN] 2026/03/10 - 11:18:50 | 200 |    1.097362ms |             ::1 | POST     "/api/messages/errors"
+[GIN] 2026/03/10 - 11:18:50 | 200 |    1.566828ms |             ::1 | POST     "/api/messages/errors"
+2026/03/10 11:19:03 Received ping from user 3
+[GIN] 2026/03/10 - 11:19:18 | 200 |     3.09722ms |             ::1 | GET      "/api/grammar-errors"
+2026/03/10 11:19:19 Received ping from user 2
+2026/03/10 11:19:32 Received ping from user 3
+2026/03/10 11:19:49 Received ping from user 2
+2026/03/10 11:20:03 Received ping from user 3
