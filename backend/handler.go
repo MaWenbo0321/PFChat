@@ -1,11 +1,8 @@
 package main
 
 import (
-	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,12 +11,12 @@ import (
 // 用户相关处理函数
 // ============================================================================
 
-// 获取用户列表（排除当前用户）
+// 获取用户列表（排除当前用户和bot用户）
 func getUsers(c *gin.Context) {
 	currentUserID := getCurrentUserID(c)
 
 	var users []User
-	if err := db.Where("id != ?", currentUserID).Find(&users).Error; err != nil {
+	if err := db.Where("id != ? AND role != ?", currentUserID, RoleBot).Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户列表失败"})
 		return
 	}
@@ -38,237 +35,6 @@ func getUserInfo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, user)
-}
-
-// ============================================================================
-// 消息相关处理函数
-// ============================================================================
-
-// 获取与某个用户的聊天记录
-func getMessages(c *gin.Context) {
-	currentUserID := getCurrentUserID(c)
-	otherUserID := c.Param("userId")
-
-	var messages []Message
-	err := db.Where(
-		"(sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)",
-		currentUserID, otherUserID, otherUserID, currentUserID,
-	).Order("created_at ASC").Preload("Sender").Preload("Receiver").Find(&messages).Error
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取消息失败"})
-		return
-	}
-
-	// 标记消息为已读
-	db.Model(&Message{}).Where(
-		"sender_id = ? AND receiver_id = ? AND is_read = ?",
-		otherUserID, currentUserID, false,
-	).Update("is_read", true)
-
-	c.JSON(http.StatusOK, messages)
-}
-
-// HTTP 发送消息接口
-// SendMessageRequest 发送消息请求
-type SendMessageRequest struct {
-	ReceiverID    uint   `json:"receiver_id" binding:"required"`
-	Content       string `json:"content" binding:"required"`
-	ErrorRecordID uint   `json:"error_record_id"` // 🔧 新增：关联的错误记录ID
-}
-
-// HTTP 发送消息接口
-func sendMessage(c *gin.Context) {
-	var req SendMessageRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	senderID := getCurrentUserID(c)
-
-	// 检查接收者是否存在
-	var receiver User
-	if err := db.First(&receiver, req.ReceiverID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "接收者不存在"})
-		return
-	}
-
-	// 保存消息
-	message := Message{
-		SenderID:   senderID,
-		ReceiverID: req.ReceiverID,
-		Content:    req.Content,
-	}
-
-	if err := db.Create(&message).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "发送消息失败"})
-		return
-	}
-
-	// 预加载关联数据
-	db.Preload("Sender").Preload("Receiver").First(&message, message.ID)
-
-	// 🔧 如果有关联的错误记录ID，更新该记录的 message_id
-	if req.ErrorRecordID > 0 {
-		var grammarError GrammarError
-		if err := db.First(&grammarError, req.ErrorRecordID).Error; err == nil {
-			// 验证该错误记录属于当前用户
-			if grammarError.UserID == senderID {
-				grammarError.MessageID = message.ID
-				if err := db.Save(&grammarError).Error; err != nil {
-					log.Printf("更新错误记录的 message_id 失败: %v", err)
-				} else {
-					log.Printf("已更新错误记录 %d 的 message_id 为 %d", req.ErrorRecordID, message.ID)
-				}
-			}
-		}
-	}
-
-	// 通过 WebSocket 发送给接收者
-	wsMsg := WSMessage{
-		Type:      "message",
-		Data:      message,
-		Timestamp: message.CreatedAt,
-	}
-
-	msgBytes, _ := json.Marshal(wsMsg)
-	if globalHub != nil {
-		globalHub.sendToUser(req.ReceiverID, msgBytes)
-		// 同时发送给发送者（用于多设备同步）
-		globalHub.sendToUser(senderID, msgBytes)
-	}
-
-	c.JSON(http.StatusOK, message)
-}
-
-// WebSocket 消息处理
-func handleChatMessage(client *Client, data interface{}) {
-	dataMap, ok := data.(map[string]interface{})
-	if !ok {
-		return
-	}
-
-	receiverID := uint(dataMap["receiver_id"].(float64))
-	content := dataMap["content"].(string)
-
-	// 保存消息
-	message := Message{
-		SenderID:   client.userID,
-		ReceiverID: receiverID,
-		Content:    content,
-		CreatedAt:  time.Now(),
-	}
-
-	if err := db.Create(&message).Error; err != nil {
-		log.Println("Save message error:", err)
-		return
-	}
-
-	// 预加载关联数据
-	db.Preload("Sender").Preload("Receiver").First(&message, message.ID)
-
-	// 发送给接收者
-	wsMsg := WSMessage{
-		Type:      "message",
-		Data:      message,
-		Timestamp: time.Now(),
-	}
-
-	msgBytes, _ := json.Marshal(wsMsg)
-	client.hub.sendToUser(receiverID, msgBytes)
-
-	// 异步语法检查
-	go checkGrammar(client.userID, message)
-}
-
-// 删除单条消息
-func deleteMessage(c *gin.Context) {
-	messageID := c.Param("id")
-	currentUserID := getCurrentUserID(c)
-
-	id, err := strconv.Atoi(messageID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
-		return
-	}
-
-	// 查询消息
-	var message Message
-	if err := db.First(&message, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "消息不存在"})
-		return
-	}
-
-	// 只能删除自己发送的消息，或者管理员可以删除任何消息
-	if message.SenderID != currentUserID && !isCurrentUserAdmin(c) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "无权删除此消息"})
-		return
-	}
-
-	// 删除消息
-	if err := db.Delete(&message).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功", "message_id": id})
-}
-
-// 清空与某个用户的聊天记录
-func clearChatHistory(c *gin.Context) {
-	otherUserID := c.Param("userId")
-	currentUserID := getCurrentUserID(c)
-
-	otherID, err := strconv.Atoi(otherUserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的用户ID"})
-		return
-	}
-
-	// 删除双方的所有消息
-	result := db.Where(
-		"(sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)",
-		currentUserID, otherID, otherID, currentUserID,
-	).Delete(&Message{})
-
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "清空失败"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":       "聊天记录已清空",
-		"deleted_count": result.RowsAffected,
-	})
-}
-
-// 删除自己发送的所有消息（针对特定对话）
-func deleteMyMessages(c *gin.Context) {
-	otherUserID := c.Param("userId")
-	currentUserID := getCurrentUserID(c)
-
-	otherID, err := strconv.Atoi(otherUserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的用户ID"})
-		return
-	}
-
-	// 只删除自己发送的消息
-	result := db.Where(
-		"sender_id = ? AND receiver_id = ?",
-		currentUserID, otherID,
-	).Delete(&Message{})
-
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":       "已删除我发送的消息",
-		"deleted_count": result.RowsAffected,
-	})
 }
 
 // ============================================================================
@@ -455,8 +221,6 @@ func updateGrammarErrorType(c *gin.Context) {
 		return
 	}
 
-	// 🔧 验证错误类型 - 使用新的常量
-	// 新
 	if !IsValidErrorType(req.ErrorType) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的错误类型"})
 		return

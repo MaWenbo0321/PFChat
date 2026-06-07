@@ -259,11 +259,7 @@ func (c *Client) handleMessage(message []byte) {
 	}
 
 	switch wsMsg.Type {
-	case "message":
-		// 处理聊天消息
-		handleChatMessage(c, wsMsg.Data)
 	case "ping":
-		// 处理心跳
 		log.Printf("Received ping from user %d", c.userID)
 	}
 }

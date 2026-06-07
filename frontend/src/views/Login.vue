@@ -114,12 +114,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Warning } from '@element-plus/icons-vue'
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
-import { autoSwitchLocaleByCountry } from '@/utils/locale'
+import { getLocaleByCountry } from '@/utils/locale'
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const activeTab = ref('login')
 const loading = ref(false)
@@ -158,7 +158,9 @@ const registerRules = {
 // 监听国家选择,自动切换语言
 watch(() => registerForm.country, (newCountry) => {
   if (newCountry) {
-    autoSwitchLocaleByCountry(newCountry, { global: { locale: { value: '' } } })
+    const newLocale = getLocaleByCountry(newCountry)
+    locale.value = newLocale
+    localStorage.setItem('locale', newLocale)
   }
 })
 
@@ -172,7 +174,7 @@ const handleLogin = async () => {
     userStore.setUserInfo(response.user)
 
     ElMessage.success(t('login.loginSuccess'))
-    await router.push('/chat')
+    await router.push('/setup')
   } catch (error) {
     console.error('Login error:', error)
   } finally {
@@ -218,7 +220,7 @@ const handleRegister = async () => {
     userStore.setUserInfo(response.user)
 
     ElMessage.success(t('login.registerSuccess'))
-    await router.push('/chat')
+    await router.push('/setup')
   } catch (error) {
     if (error === 'cancel') {
       ElMessage.info(t('login.registerCanceled'))

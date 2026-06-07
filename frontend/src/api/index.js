@@ -63,22 +63,21 @@ const api = {
     getUsers: () => instance.get('/users'),
     getUserInfo: (id) => instance.get(`/users/${id}`),
 
-    // 消息相关
-    getMessages: (userId) => instance.get(`/messages/${userId}`),
-    sendMessage: (data) => instance.post('/messages', data),
-    checkMessageBeforeSend: (data) => instance.post('/messages/check', data),
-    deleteMessage: (id) => instance.delete(`/messages/${id}`),
-    clearChatHistory: (userId) => instance.delete(`/messages/clear/${userId}`),
-    deleteMyMessages: (userId) => instance.delete(`/messages/mine/${userId}`),
-
-    // 🆕 实时检测接口 (Grammarly 风格, 每5秒调用)
-    realtimeCheck: (data) => instance.post('/messages/realtime-check', data),
-
-    // 🆕 获取消息关联的语用错误 (接收方使用)
+    // 获取消息关联的语用错误
     getMessageErrors: (messageIds) => instance.post('/messages/errors', { message_ids: messageIds }),
 
-    // 🆕 AI Chat 接口
-    aiChat: (data) => instance.post('/ai/chat', data),
+    // 会话管理
+    createSession: (data) => instance.post('/sessions', data),
+    getActiveSession: () => instance.get('/sessions/active'),
+    endSession: (id) => instance.post(`/sessions/${id}/end`),
+    getSessionMessages: (id) => instance.get(`/sessions/${id}/messages`),
+    getSessionFeedback: (id) => instance.get(`/sessions/${id}/feedback`),
+
+    // LLM 对话
+    sendLLMMessage: (data) => instance.post('/llm/message', data),
+
+    // Bot 信息
+    getLLMBotInfo: () => instance.get('/bot/info'),
 
     // 语法错误相关
     getGrammarErrors: (errorType = 'all') => {
@@ -91,7 +90,7 @@ const api = {
     updateGrammarErrorType: (id, errorType) => instance.put(`/grammar-errors/${id}/type`, { error_type: errorType }),
 
     // 管理员相关
-    getAllUsers: () => instance.get('/admin/users'),
+    getAllUsersForAdmin: () => instance.get('/admin/users'),
     deleteUser: (id) => instance.delete(`/admin/users/${id}`),
     updateUserRole: (id, role) => instance.put(`/admin/users/${id}/role`, { role }),
     getUserStats: () => instance.get('/admin/stats')

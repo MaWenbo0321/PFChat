@@ -82,6 +82,12 @@ func login(c *gin.Context) {
 		return
 	}
 
+	// Bot 用户不允许登录
+	if user.Role == RoleBot {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
+		return
+	}
+
 	// 验证密码
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
@@ -185,15 +191,4 @@ func adminMiddleware() gin.HandlerFunc {
 func getCurrentUserID(c *gin.Context) uint {
 	userID, _ := c.Get("userID")
 	return userID.(uint)
-}
-
-// 获取当前用户角色
-func getCurrentUserRole(c *gin.Context) string {
-	role, _ := c.Get("role")
-	return role.(string)
-}
-
-// 检查当前用户是否为管理员
-func isCurrentUserAdmin(c *gin.Context) bool {
-	return getCurrentUserRole(c) == RoleAdmin
 }

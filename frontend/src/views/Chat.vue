@@ -1,6 +1,6 @@
 <template>
   <div class="chat-container">
-    <!-- 左侧: 用户列表 -->
+    <!-- 左侧：会话信息面板 -->
     <div class="sidebar">
       <div class="sidebar-header">
         <h2>{{ userStore.userInfo.username }}</h2>
@@ -11,739 +11,526 @@
         </div>
       </div>
 
-      <div class="search-box">
-        <el-input v-model="searchKeyword" :placeholder="$t('chat.searchUser')" prefix-icon="Search" clearable />
-      </div>
-
-      <div class="connection-status" :class="chatStore.isConnected ? 'connected' : 'disconnected'">
-        <el-icon><Connection /></el-icon>
-        <span>{{ chatStore.isConnected ? $t('chat.connected') : $t('chat.disconnected') }}</span>
-      </div>
-
-      <div class="user-list">
-        <div
-            v-for="user in filteredUsers"
-            :key="user.id"
-            class="user-item"
-            :class="{ active: chatStore.currentUser?.id === user.id }"
-            @click="chatStore.selectUser(user)"
-        >
-          <el-avatar :size="40">{{ user.username[0].toUpperCase() }}</el-avatar>
-          <div class="user-info">
-            <div class="username">{{ user.username }}</div>
-            <div class="country">{{ user.country }}</div>
-          </div>
+      <!-- 会话信息 -->
+      <div v-if="sessionStore.currentSession" class="session-info">
+        <div class="session-info-title">{{ $t('chat.sessionInfo') }}</div>
+        <div class="session-info-item">
+          <span class="info-label">{{ $t('setup.relationship') }}:</span>
+          <span class="info-value">{{ sessionStore.currentSession.relationship_type }}</span>
         </div>
-        <el-empty v-if="filteredUsers.length === 0" :description="$t('chat.noUsers')" />
+        <div class="session-info-item">
+          <span class="info-label">{{ $t('setup.topic') }}:</span>
+          <span class="info-value">{{ sessionStore.currentSession.topic }}</span>
+        </div>
+        <div class="session-info-item">
+          <span class="info-label">{{ $t('chat.mode') }}:</span>
+          <el-tag size="small" :type="sessionStore.currentSession.mode === 'user_l2' ? 'primary' : 'success'">
+            {{ sessionStore.currentSession.mode === 'user_l2' ? $t('setup.modeUserL2Short') : $t('setup.modeLLML2Short') }}
+          </el-tag>
+        </div>
+        <div class="session-info-item">
+          <span class="info-label">{{ $t('chat.targetLanguage') }}:</span>
+          <span class="info-value">{{ getLanguageName(sessionStore.currentSession.target_language) }}</span>
+        </div>
+        <div class="session-info-item">
+          <span class="info-label">{{ $t('chat.rounds') }}:</span>
+          <span class="info-value round-count">{{ sessionStore.currentSession.round_count || 0 }}</span>
+          <span v-if="sessionStore.currentSession.feedback_mode === 'rounds_5'" class="rounds-limit"> / 5</span>
+        </div>
+
+        <!-- 倒计时（完整对话模式） -->
+        <div v-if="sessionStore.currentSession.feedback_mode === 'complete' && sessionActive && timeRemaining > 0" class="timer-info" :class="{ 'timer-warning': timeRemaining <= 60 }">
+          <el-icon><Timer /></el-icon>
+          <span>{{ formatTimeRemaining() }}</span>
+        </div>
+
+        <el-divider />
+        <el-button type="danger" plain size="small" @click="endSession" class="end-session-btn" :disabled="!sessionActive">
+          {{ $t('chat.endSession') }}
+        </el-button>
+        <el-button plain size="small" @click="goToSetup" class="new-session-btn">
+          {{ $t('chat.newSession') }}
+        </el-button>
+      </div>
+
+      <!-- 语用错误统计 -->
+      <div v-if="errorCount > 0" class="error-stats">
+        <div class="error-stats-title">{{ $t('chat.pragmaticErrors') }}</div>
+        <div class="error-stats-count">
+          <el-icon color="#e6a23c"><WarningFilled /></el-icon>
+          <span>{{ $t('chat.errorsDetected', { count: errorCount }) }}</span>
+        </div>
       </div>
     </div>
 
-    <!-- 中间: 聊天区域 -->
+    <!-- 中间：聊天区域 -->
     <div class="chat-area">
-      <div v-if="chatStore.currentUser" class="chat-content">
+      <div class="chat-content">
         <!-- 聊天头部 -->
         <div class="chat-header">
           <div class="chat-user-info">
-            <el-avatar :size="36">{{ chatStore.currentUser.username[0].toUpperCase() }}</el-avatar>
+            <div class="bot-avatar">
+              <el-icon :size="24" color="white"><ChatDotRound /></el-icon>
+            </div>
             <div>
-              <div class="username">{{ chatStore.currentUser.username }}</div>
-              <div class="country">{{ chatStore.currentUser.country }}</div>
+              <div class="username">{{ $t('chat.llmBot') }}</div>
+              <div class="country">
+                <el-tag size="small" effect="plain" :type="sessionStore.currentSession?.mode === 'user_l2' ? 'primary' : 'success'">
+                  {{ sessionStore.currentSession?.mode === 'user_l2' ? $t('setup.modeUserL2Short') : $t('setup.modeLLML2Short') }}
+                </el-tag>
+                <span class="target-lang">{{ getLanguageName(sessionStore.currentSession?.target_language) }}</span>
+              </div>
             </div>
           </div>
-          <el-dropdown trigger="click">
-            <el-button :icon="MoreFilled" circle size="small" />
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item @click="clearChatHistory">
-                  <el-icon><Delete /></el-icon>
-                  {{ $t('chat.clearChat') }}
-                </el-dropdown-item>
-                <el-dropdown-item @click="deleteMyMessages">
-                  <el-icon><Delete /></el-icon>
-                  {{ $t('chat.deleteMyMessages') }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <div class="header-right">
+            <el-tag v-if="sessionStore.currentSession?.feedback_mode === 'complete'" size="small" type="info">
+              {{ $t('setup.feedbackPeriodic') }}
+            </el-tag>
+            <el-tag v-else size="small" type="success">
+              {{ $t('setup.feedbackSummary') }}
+            </el-tag>
+          </div>
         </div>
 
         <!-- 消息列表 -->
         <div class="messages-container" ref="messagesContainer">
-          <div
-              v-for="msg in chatStore.currentMessages"
-              :key="msg.id"
-              class="message-wrapper"
-              :class="{ 'message-sent': msg.sender_id === userStore.userInfo.id }"
-          >
-            <div class="message">
-              <div class="message-header">
-                <span class="message-time">{{ formatMessageTime(msg.created_at) }}</span>
-                <div class="message-actions">
-                  <!-- 接收方看到的语用失误小标识 -->
-                  <el-tooltip
-                      v-if="msg.sender_id !== userStore.userInfo.id && messageErrors[msg.id]"
-                      effect="light"
-                      placement="top"
-                      :width="320"
-                      trigger="click"
-                      popper-class="error-tooltip-popper"
-                  >
-                    <template #content>
-                      <div class="error-tooltip-content">
-                        <div class="error-tooltip-header">
-                          <el-tag :type="messageErrors[msg.id].error_type === '语用语言失误' ? 'warning' : 'danger'" size="small">
-                            {{ messageErrors[msg.id].error_type === '语用语言失误' ? $t('chat.pragmalinguisticError') : $t('chat.sociopragmaticError') }}
-                          </el-tag>
-                        </div>
-                        <div class="error-tooltip-section" v-if="messageErrors[msg.id].suggestion">
-                          <div class="error-tooltip-label">{{ $t('chat.suggestion') }}</div>
-                          <div class="error-tooltip-text suggestion">{{ messageErrors[msg.id].suggestion }}</div>
-                        </div>
-                        <div class="error-tooltip-section" v-if="messageErrors[msg.id].explanation">
-                          <div class="error-tooltip-label">{{ $t('chat.explanation') }}</div>
-                          <div class="error-tooltip-text explanation">{{ messageErrors[msg.id].explanation }}</div>
-                        </div>
-                      </div>
-                    </template>
-                    <span class="error-indicator" :class="getMessageErrorIndicatorClass(messageErrors[msg.id].error_type)">
-                      <el-icon :size="14"><WarningFilled /></el-icon>
-                    </span>
-                  </el-tooltip>
-
-                  <el-button
-                      v-if="msg.sender_id === userStore.userInfo.id || userStore.userInfo.role === 'admin'"
-                      :icon="Delete"
-                      size="small"
-                      :type="msg.sender_id === userStore.userInfo.id ? 'warning' : 'danger'"
-                      text
-                      @click="deleteMessage(msg.id)"
-                      class="delete-btn"
-                  />
-                </div>
+          <!-- 开场白 -->
+          <div class="welcome-message" v-if="sessionStore.messages.length === 0">
+            <div class="welcome-content">
+              <el-icon :size="40" color="#409eff"><ChatDotRound /></el-icon>
+              <h3>{{ $t('chat.welcomeTitle') }}</h3>
+              <p>{{ getWelcomeMessage() }}</p>
+              <div class="welcome-tips">
+                <p v-if="sessionStore.currentSession?.mode === 'user_l2'">{{ $t('chat.tipUserL2') }}</p>
+                <p v-else>{{ $t('chat.tipLLML2') }}</p>
               </div>
-              <div class="message-text">{{ msg.content }}</div>
             </div>
           </div>
 
-          <div v-if="chatStore.currentMessages.length === 0" class="empty-messages">
-            <el-empty :description="$t('chat.noMessages')" />
+          <div
+            v-for="msg in sessionStore.messages"
+            :key="msg.id"
+            class="message-wrapper"
+            :class="{ 'message-sent': msg.role === 'user' || msg.sender_id === userStore.userInfo.id }"
+          >
+            <!-- Bot头像（左侧消息） -->
+            <div v-if="msg.role === 'llm' || msg.sender_id !== userStore.userInfo.id" class="message-avatar bot-msg-avatar">
+              <el-icon :size="16" color="white"><ChatDotRound /></el-icon>
+            </div>
+
+            <div class="message">
+              <div class="message-header">
+                <span class="message-sender">
+                  {{ msg.role === 'llm' || msg.sender_id !== userStore.userInfo.id ? $t('chat.llmBot') : userStore.userInfo.username }}
+                </span>
+                <span class="message-time">{{ formatMessageTime(msg.created_at) }}</span>
+              </div>
+              <div class="message-text">{{ msg.content }}</div>
+              <!-- 语用错误标识（用户消息） -->
+              <div v-if="(msg.role === 'user' || msg.sender_id === userStore.userInfo.id) && messageErrors[msg.id]" class="message-error-badge">
+                <el-popover
+                  placement="top"
+                  :width="300"
+                  trigger="click"
+                >
+                  <template #reference>
+                    <span class="error-indicator" :class="getErrorClass(messageErrors[msg.id].error_type)">
+                      <el-icon :size="12"><WarningFilled /></el-icon>
+                      {{ getErrorTypeShort(messageErrors[msg.id].error_type) }}
+                    </span>
+                  </template>
+                  <div class="error-popover">
+                    <div class="error-popover-type">
+                      <el-tag size="small" :type="isProblematicType(messageErrors[msg.id].error_type) ? 'danger' : 'warning'">
+                        {{ messageErrors[msg.id].error_type }}
+                      </el-tag>
+                    </div>
+                    <div v-if="messageErrors[msg.id].suggestion" class="error-popover-section">
+                      <div class="error-popover-label">{{ $t('chat.suggestion') }}</div>
+                      <div class="error-popover-text suggestion-text">{{ messageErrors[msg.id].suggestion }}</div>
+                    </div>
+                    <div v-if="messageErrors[msg.id].explanation" class="error-popover-section">
+                      <div class="error-popover-label">{{ $t('chat.explanation') }}</div>
+                      <div class="error-popover-text">{{ messageErrors[msg.id].explanation }}</div>
+                    </div>
+                  </div>
+                </el-popover>
+              </div>
+            </div>
+          </div>
+
+          <!-- LLM 正在输入指示 -->
+          <div v-if="isLLMTyping" class="message-wrapper">
+            <div class="message-avatar bot-msg-avatar">
+              <el-icon :size="16" color="white"><ChatDotRound /></el-icon>
+            </div>
+            <div class="message typing-indicator">
+              <span></span><span></span><span></span>
+            </div>
           </div>
         </div>
 
-        <!-- Grammarly 风格输入区域 -->
+        <!-- 输入区域 -->
         <div class="input-area">
           <div class="input-wrapper">
-            <div class="input-editor-container">
-              <!-- 下划线渲染层 -->
-              <div class="underline-layer" ref="underlineLayer" v-html="renderedUnderlineHtml"></div>
-              <!-- 文本输入 -->
-              <textarea
-                  ref="textareaRef"
-                  v-model="messageInput"
-                  class="input-editor"
-                  :placeholder="$t('chat.inputPlaceholder')"
-                  @keydown.ctrl.enter="sendMessage"
-                  @input="handleInputChange"
-                  @scroll="syncScroll"
-              ></textarea>
-            </div>
+            <textarea
+              ref="textareaRef"
+              v-model="messageInput"
+              class="input-editor"
+              :placeholder="getInputPlaceholder()"
+              @keydown.ctrl.enter="sendMessage"
+              :disabled="isSending || !sessionActive"
+            ></textarea>
             <div class="input-status-bar">
               <div class="status-left">
-                <span v-if="isChecking" class="checking-status">
-                  <el-icon class="is-loading"><Loading /></el-icon>
-                  {{ $t('chat.checking') }}
-                </span>
-                <span v-else-if="inputErrors.length > 0" class="error-count">
-                  <el-icon><WarningFilled /></el-icon>
-                  {{ $t('chat.errorsFound', { count: inputErrors.length }) }}
-                </span>
-                <span v-else-if="messageInput.trim() && lastCheckTime" class="no-error">
-                  <el-icon><CircleCheckFilled /></el-icon>
-                  {{ $t('chat.noErrors') }}
-                </span>
+                <span v-if="!sessionActive" class="session-ended-hint">{{ $t('feedback.summaryTitle') }}</span>
               </div>
               <div class="status-right">
                 <el-button
-                    type="primary"
-                    :icon="Promotion"
-                    @click="sendMessage"
-                    :disabled="!messageInput.trim() || isSending"
-                    size="small"
+                  type="primary"
+                  :icon="Promotion"
+                  @click="sendMessage"
+                  :disabled="!messageInput.trim() || isSending || !sessionStore.currentSession || !sessionActive"
+                  size="small"
                 >
                   {{ $t('chat.send') }}
                 </el-button>
               </div>
             </div>
           </div>
-
-          <!-- 输入框下方的错误详情卡片 -->
-          <div v-if="inputErrors.length > 0" class="error-cards">
-            <div v-for="(error, index) in inputErrors" :key="index" class="error-card" :class="getErrorCardClass(error)">
-              <div class="error-card-header">
-                <el-tag :type="error.error_type === '语用语言失误' ? 'warning' : 'danger'" size="small" effect="dark">
-                  {{ error.error_type === '语用语言失误' ? $t('chat.pragmalinguisticError') : $t('chat.sociopragmaticError') }}
-                </el-tag>
-                <el-button type="primary" size="small" text @click="applySuggestion(error)">
-                  {{ $t('chat.applySuggestion') }}
-                </el-button>
-              </div>
-              <div class="error-card-body">
-                <div class="error-original">
-                  <span class="label">{{ $t('chat.originalMessage') }}:</span>
-                  <span class="text error-text">{{ error.original_text }}</span>
-                </div>
-                <div class="error-suggestion" v-if="error.suggestion">
-                  <span class="label">{{ $t('chat.suggestion') }}:</span>
-                  <span class="text suggestion-text">{{ error.suggestion }}</span>
-                </div>
-                <div class="error-explanation" v-if="error.explanation">
-                  <span class="label">{{ $t('chat.explanation') }}:</span>
-                  <span class="text">{{ error.explanation }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 未选择用户时的提示 -->
-      <div v-else class="empty-chat">
-        <el-empty :description="$t('chat.selectUser')" />
-      </div>
-    </div>
-
-    <!-- 右侧: AI Chat 面板 -->
-    <div class="ai-panel" :class="{ collapsed: aiPanelCollapsed }">
-      <div class="ai-panel-header">
-        <div class="ai-panel-title" @click="aiPanelCollapsed = !aiPanelCollapsed">
-          <el-icon><ChatDotRound /></el-icon>
-          <span>{{ $t('chat.aiAssistant') }}</span>
-        </div>
-        <el-button :icon="aiPanelCollapsed ? ArrowLeft : ArrowRight" circle size="small" @click="aiPanelCollapsed = !aiPanelCollapsed" />
-      </div>
-
-      <div v-if="!aiPanelCollapsed" class="ai-panel-content">
-        <div class="ai-messages" ref="aiMessagesContainer">
-          <div v-if="aiMessages.length === 0" class="ai-welcome">
-            <el-icon :size="48" color="#409eff"><ChatDotRound /></el-icon>
-            <p>{{ $t('chat.aiWelcome') }}</p>
-            <div class="ai-suggestions">
-              <el-button size="small" round @click="sendAiMessage($t('chat.aiSuggest1'))">{{ $t('chat.aiSuggest1') }}</el-button>
-              <el-button size="small" round @click="sendAiMessage($t('chat.aiSuggest2'))">{{ $t('chat.aiSuggest2') }}</el-button>
-              <el-button size="small" round @click="sendAiMessage($t('chat.aiSuggest3'))">{{ $t('chat.aiSuggest3') }}</el-button>
-            </div>
-          </div>
-
-          <div v-for="(msg, index) in aiMessages" :key="index" class="ai-message-wrapper" :class="{ 'ai-user-msg': msg.role === 'user', 'ai-bot-msg': msg.role === 'assistant' }">
-            <div class="ai-message">
-              <div class="ai-message-content" v-html="msg.role === 'assistant' ? renderMarkdown(msg.content) : escapeHtml(msg.content)"></div>
-            </div>
-          </div>
-
-          <div v-if="aiLoading" class="ai-message-wrapper ai-bot-msg">
-            <div class="ai-message">
-              <div class="ai-message-content">
-                <el-icon class="is-loading"><Loading /></el-icon>
-                {{ $t('chat.aiThinking') }}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="ai-input-area">
-          <el-input
-              v-model="aiInput"
-              :placeholder="$t('chat.aiInputPlaceholder')"
-              @keydown.enter.prevent="sendAiMessage(aiInput)"
-              :disabled="aiLoading"
-              size="default"
-          >
-            <template #append>
-              <el-button :icon="Promotion" @click="sendAiMessage(aiInput)" :disabled="!aiInput.trim() || aiLoading" />
-            </template>
-          </el-input>
         </div>
       </div>
     </div>
+
+    <!-- 会话汇总对话框 -->
+    <el-dialog
+      v-model="showSummary"
+      :title="$t('feedback.summaryTitle')"
+      width="600px"
+      :close-on-click-modal="false"
+    >
+      <div class="feedback-content">
+        <div v-if="autoEndReason" class="auto-end-notice">
+          <el-icon color="#409eff"><InfoFilled /></el-icon>
+          <span>{{ autoEndReason }}</span>
+        </div>
+        <div class="feedback-stats">
+          <div class="stat-item">
+            <div class="stat-num">{{ sessionStore.currentSession?.round_count || 0 }}</div>
+            <div class="stat-label">{{ $t('feedback.totalRounds') }}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num">{{ errorCount }}</div>
+            <div class="stat-label">{{ $t('feedback.totalErrors') }}</div>
+          </div>
+        </div>
+        <el-divider />
+        <div v-if="summaryLoading" class="summary-loading">
+          <el-icon class="is-loading"><Loading /></el-icon>
+          {{ $t('feedback.generating') }}
+        </div>
+        <div v-else class="feedback-text" v-html="renderMarkdown(summaryText)"></div>
+      </div>
+      <template #footer>
+        <el-button @click="showSummary = false; goToSetup()">{{ $t('feedback.newSession') }}</el-button>
+        <el-button type="primary" @click="showSummary = false">{{ $t('feedback.close') }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
-  SwitchButton, Document, Promotion, Connection, Delete, MoreFilled,
-  WarningFilled, CircleCheckFilled, Loading, ChatDotRound, ArrowLeft, ArrowRight
+  SwitchButton, Document, Promotion, WarningFilled,
+  Loading, ChatDotRound, Timer, InfoFilled
 } from '@element-plus/icons-vue'
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
-import { useChatStore } from '@/stores/chat'
-import wsManager from '@/utils/websocket'
+import { useSessionStore } from '@/stores/session'
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
-const chatStore = useChatStore()
+const sessionStore = useSessionStore()
 const { t } = useI18n()
 
 // ===================== 基础状态 =====================
-const searchKeyword = ref('')
 const messageInput = ref('')
 const messagesContainer = ref(null)
 const textareaRef = ref(null)
-const underlineLayer = ref(null)
-
-// ===================== 实时检测状态 =====================
-const isChecking = ref(false)
-const inputErrors = ref([])
-const lastCheckTime = ref(null)
-let debounceTimer = null
-let lastCheckedContent = ''
 const isSending = ref(false)
+const isLLMTyping = ref(false)
+const sessionActive = ref(true)
 
-// ===================== 接收方消息错误标识 =====================
-const messageErrors = ref({}) // { messageId: { error_type, suggestion, explanation } }
+// ===================== 消息错误标识 =====================
+const messageErrors = ref({})
+const errorCount = ref(0)
 
-// ===================== AI Chat 状态 =====================
-const aiPanelCollapsed = ref(false)
-const aiMessages = ref([])
-const aiInput = ref('')
-const aiLoading = ref(false)
-const aiMessagesContainer = ref(null)
+// ===================== 汇总对话框状态 =====================
+const showSummary = ref(false)
+const summaryText = ref('')
+const summaryLoading = ref(false)
+const autoEndReason = ref('')
 
-// ===================== 计算属性 =====================
-const filteredUsers = computed(() => {
-  if (!searchKeyword.value) return chatStore.users
-  return chatStore.users.filter(user =>
-      user.username.toLowerCase().includes(searchKeyword.value.toLowerCase())
-  )
-})
+// ===================== 10分钟倒计时 =====================
+const SESSION_DURATION = 10 * 60 // 10分钟（秒）
+const timeRemaining = ref(SESSION_DURATION)
+let countdownTimer = null
 
-// ===================== 错误类型判断工具函数 =====================
-// 判断是否为严重(problematic)类型
-const isProblematicErrorType = (errorType) => {
-  return errorType === '严重语用语言失误' ||
-      errorType === '严重社会语用失误' ||
-      errorType === '语用语言失误和社会语用失误'
+const formatTimeRemaining = () => {
+  const min = Math.floor(timeRemaining.value / 60)
+  const sec = timeRemaining.value % 60
+  return t('feedback.timeRemaining', { min, sec: String(sec).padStart(2, '0') })
 }
 
-// 获取错误卡片CSS类
-const getErrorCardClass = (error) => {
-  const evaluation = error.overall_evaluation ||
-      (isProblematicErrorType(error.error_type) ? 'problematic' : 'improvable')
-  return evaluation === 'problematic' ? 'problematic-card' : 'improvable-card'
-}
-
-// 获取消息错误标识CSS类
-const getMessageErrorIndicatorClass = (errorType) => {
-  return isProblematicErrorType(errorType) ? 'problematic' : 'improvable'
-}
-
-// ===================== 下划线渲染 =====================
-const renderedUnderlineHtml = computed(() => {
-  if (!messageInput.value || inputErrors.value.length === 0) {
-    return escapeHtml(messageInput.value) + '\n'
-  }
-
-  let text = messageInput.value
-  let html = ''
-  let lastIndex = 0
-
-  const markers = []
-  for (const error of inputErrors.value) {
-    if (error.start_index !== undefined && error.end_index !== undefined) {
-      markers.push({
-        start: error.start_index,
-        end: error.end_index,
-        type: error.error_type,
-        evaluation: error.overall_evaluation || (isProblematicErrorType(error.error_type) ? 'problematic' : 'improvable')
-      })
+const startCountdown = () => {
+  if (!sessionStore.currentSession || sessionStore.currentSession.feedback_mode !== 'complete') return
+  countdownTimer = setInterval(() => {
+    if (!sessionActive.value) {
+      clearInterval(countdownTimer)
+      return
     }
-  }
-  markers.sort((a, b) => a.start - b.start)
-
-  // ❌ 删除这里原来的 isProblematicErrorType、getErrorCardClass、getMessageErrorIndicatorClass 定义
-
-  for (const marker of markers) {
-    if (marker.start > lastIndex) {
-      html += escapeHtml(text.slice(lastIndex, marker.start))
+    timeRemaining.value--
+    if (timeRemaining.value === 60) {
+      ElMessage.warning(t('feedback.timeoutWarning'))
     }
-    const errorClass = marker.evaluation === 'problematic' ? 'underline-problematic' : 'underline-improvable'
-    html += `<span class="${errorClass}">${escapeHtml(text.slice(marker.start, marker.end))}</span>`
-    lastIndex = marker.end
-  }
+    if (timeRemaining.value <= 0) {
+      clearInterval(countdownTimer)
+      autoEndSession('timeout')
+    }
+  }, 1000)
+}
 
-  if (lastIndex < text.length) {
-    html += escapeHtml(text.slice(lastIndex))
-  }
+const autoEndSession = async (reason) => {
+  if (!sessionActive.value || !sessionStore.currentSession) return
+  sessionActive.value = false
+  summaryLoading.value = true
+  showSummary.value = true
+  autoEndReason.value = reason === 'timeout'
+    ? t('feedback.autoEndTimeout')
+    : t('feedback.autoEndRounds')
 
-  return html + '\n'
-})
+  try {
+    const data = await api.endSession(sessionStore.currentSession.id)
+    summaryText.value = data.summary_feedback || t('feedback.noSummary')
+    if (sessionStore.currentSession) {
+      sessionStore.currentSession.is_active = false
+    }
+  } catch (error) {
+    console.error('Auto end session error:', error)
+    summaryText.value = t('feedback.noSummary')
+  } finally {
+    summaryLoading.value = false
+  }
+}
 
 // ===================== 生命周期 =====================
 onMounted(async () => {
-  // 【Fix】用 connect() 而不是每次都新建连接
-  // 新的 websocket.js 中 connect() 已内置"若已连接则跳过"的防重复逻辑
-  wsManager.connect()
-
-  // 【Fix】注册 wsHandler，接收 grammar_check / receiver_error_notify 通知
-  wsManager.onMessage(wsHandler)
-
-  // 恢复当前用户的草稿（从 GrammarErrors 返回时）
-  if (chatStore.currentUser) {
-    messageInput.value = chatStore.getDraft(chatStore.currentUser.id)
+  if (!sessionStore.currentSession) {
+    router.push('/setup')
+    return
   }
 
-  try {
-    const users = await api.getUsers()
-    chatStore.setUsers(users.filter(u => u.id !== userStore.userInfo.id))
-  } catch (error) {
-    console.error('Load users error:', error)
+  if (sessionStore.currentSession.is_active === false) {
+    sessionActive.value = false
+  }
+
+  if (sessionStore.messages.length === 0) {
+    await loadSessionMessages()
+  }
+  await nextTick()
+  scrollToBottom()
+
+  if (sessionActive.value) {
+    startCountdown()
   }
 })
 
 onUnmounted(() => {
-  wsManager.offMessage(wsHandler)
-  if (debounceTimer) clearTimeout(debounceTimer)
+  if (countdownTimer) clearInterval(countdownTimer)
 })
 
-// ===================== 监听当前用户变化 =====================
-watch(() => chatStore.currentUser, async (newUser) => {
-  if (newUser) {
-    try {
-      const messages = await api.getMessages(newUser.id)
-      chatStore.setCurrentMessages(messages)
-      await nextTick()
-      scrollToBottom()
-      // 加载接收方消息的错误标识
-      await loadMessageErrors()
-    } catch (error) {
-      console.error('Load messages error:', error)
-    }
-  }
-  // 【Fix】恢复新用户的草稿，不清空输入框
-  if (newUser) {
-    messageInput.value = chatStore.getDraft(newUser.id)
-  } else {
-    messageInput.value = ''
-  }
-  // 只清除检测状态
-  inputErrors.value = []
-  lastCheckedContent = ''
-  lastCheckTime.value = null
-  if (debounceTimer) {
-    clearTimeout(debounceTimer)
-    debounceTimer = null
-  }
-})
-
-// 监听新消息加入后检查错误
-watch(() => chatStore.currentMessages, async () => {
-  await nextTick()
-  scrollToBottom()
-  loadMessageErrors()
-}, { deep: true })
-
-// ===================== 加载接收方消息错误 =====================
-const loadMessageErrors = async () => {
-  if (!chatStore.currentUser) return
-  const msgs = chatStore.currentMessages
-  // 只对收到的消息查询错误
-  const receivedMsgIds = msgs
-      .filter(m => m.sender_id !== userStore.userInfo.id && m.id)
-      .map(m => m.id)
-
-  if (receivedMsgIds.length === 0) return
-
+// ===================== 加载会话消息 =====================
+const loadSessionMessages = async () => {
+  if (!sessionStore.currentSession) return
   try {
-    const errors = await api.getMessageErrors(receivedMsgIds)
+    const data = await api.getSessionMessages(sessionStore.currentSession.id)
+    sessionStore.setMessages(data.messages || [])
+    sessionStore.setSession(data.session)
+    await loadMessageErrors()
+  } catch (e) {
+    console.error('Load session messages error:', e)
+  }
+}
+
+// ===================== 加载消息语用错误 =====================
+const loadMessageErrors = async () => {
+  const msgs = sessionStore.messages.filter(m => m.role === 'user' || m.sender_id === userStore.userInfo.id)
+  if (msgs.length === 0) return
+  const msgIds = msgs.map(m => m.id).filter(Boolean)
+  if (msgIds.length === 0) return
+  try {
+    const errors = await api.getMessageErrors(msgIds)
     const errorMap = {}
     for (const err of errors) {
       errorMap[err.message_id] = err
     }
     messageErrors.value = errorMap
+    errorCount.value = errors.length
   } catch (e) {
-    // 静默处理
     console.error('Load message errors:', e)
   }
 }
 
-// ===================== WebSocket 消息处理 =====================
-const wsHandler = (message) => {
-  // grammar_check: 发送方收到自己消息的检测结果
-  // receiver_error_notify: 接收方收到对方消息有语用错误的通知
-  if (message.type === 'grammar_check' || message.type === 'receiver_error_notify') {
-    // 重新从后端拉取当前会话的消息错误标识
-    loadMessageErrors()
-  }
-}
+// ===================== 发送消息给LLM =====================
+const sendMessage = async () => {
+  if (isSending.value || !messageInput.value.trim() || !sessionStore.currentSession || !sessionActive.value) return
 
-// ===================== 实时检测逻辑 =====================
-const handleInputChange = () => {
-  // 输入变化时同步滚动
-  syncScroll()
-  // 【Fix】保存草稿到 chatStore
-  if (chatStore.currentUser) {
-    chatStore.saveDraft(chatStore.currentUser.id, messageInput.value)
-  }
-  // 用户输入变化时，重置防抖定时器
-  // 用户停止输入 2 秒后才触发检测
-  if (debounceTimer) {
-    clearTimeout(debounceTimer)
-    debounceTimer = null
-  }
+  isSending.value = true
   const content = messageInput.value.trim()
-  if (content && content !== lastCheckedContent && chatStore.currentUser) {
-    debounceTimer = setTimeout(() => {
-      performCheck()
-    }, 3000)
-  }
-  // 如果输入框被清空，清除错误状态
-  if (!content) {
-    inputErrors.value = []
-    lastCheckedContent = ''
-    lastCheckTime.value = null
-  }
-}
-
-const syncScroll = () => {
-  if (textareaRef.value && underlineLayer.value) {
-    underlineLayer.value.scrollTop = textareaRef.value.scrollTop
-    underlineLayer.value.scrollLeft = textareaRef.value.scrollLeft
-  }
-}
-
-const performCheck = async () => {
-  if (!chatStore.currentUser || !messageInput.value.trim()) return
-
-  const content = messageInput.value.trim()
-  isChecking.value = true
+  messageInput.value = ''
+  isLLMTyping.value = true
 
   try {
-    const result = await api.realtimeCheck({
-      receiver_id: chatStore.currentUser.id,
+    const result = await api.sendLLMMessage({
+      session_id: sessionStore.currentSession.id,
       content: content
     })
 
-    lastCheckedContent = content
-    lastCheckTime.value = Date.now()
-
-    if (result.has_error && result.errors && result.errors.length > 0) {
-      inputErrors.value = result.errors
-    } else {
-      inputErrors.value = []
+    if (result.user_message) {
+      sessionStore.addMessage(result.user_message)
     }
-  } catch (error) {
-    console.error('Realtime check error:', error)
-  } finally {
-    isChecking.value = false
-  }
-}
-
-// ===================== 发送消息 =====================
-const sendMessage = async () => {
-  if (isSending.value) return
-  if (!messageInput.value.trim() || !chatStore.currentUser) return
-
-  isSending.value = true
-  try {
-    const content = messageInput.value.trim()
-    const receiverId = chatStore.currentUser.id
-
-    if (content !== lastCheckedContent) {
-      await performCheck()
+    if (result.llm_response) {
+      sessionStore.addMessage(result.llm_response)
     }
 
-    if (inputErrors.value.length > 0) {
-      try {
-        await ElMessageBox.confirm(
-            t('chat.sendWithErrorsConfirm'),
-            t('chat.warning'),
-            {
-              confirmButtonText: t('chat.sendAnyway'),
-              cancelButtonText: t('common.cancel'),
-              type: 'warning'
-            }
-        )
-      } catch {
-        return
+    sessionStore.incrementRound()
+
+    if (result.pragmatic_check?.has_error && result.user_message?.id) {
+      messageErrors.value[result.user_message.id] = {
+        message_id: result.user_message.id,
+        error_type: result.pragmatic_check.error_type,
+        suggestion: result.pragmatic_check.suggestion,
+        explanation: result.pragmatic_check.explanation,
+      }
+      errorCount.value++
+    }
+
+    await nextTick()
+    scrollToBottom()
+
+    // 五轮模式自动结束
+    if (result.session_ended) {
+      sessionActive.value = false
+      if (countdownTimer) clearInterval(countdownTimer)
+      summaryText.value = result.session_summary || t('feedback.noSummary')
+      autoEndReason.value = t('feedback.autoEndRounds')
+      showSummary.value = true
+      if (sessionStore.currentSession) {
+        sessionStore.currentSession.is_active = false
       }
     }
 
-    const errorRecordId = inputErrors.value.length > 0 && inputErrors.value[0].error_record_id
-        ? inputErrors.value[0].error_record_id
-        : 0
-
-    const sentMessage = await api.sendMessage({
-      receiver_id: receiverId,
-      content: content,
-      error_record_id: errorRecordId
-    })
-
-    if (sentMessage && sentMessage.id) {
-      chatStore.addMessage(receiverId, sentMessage)
-    }
-
-    messageInput.value = ''
-    chatStore.clearDraft(receiverId)
-    inputErrors.value = []
-    lastCheckedContent = ''
-    lastCheckTime.value = null
-    ElMessage.success(t('chat.sendSuccess'))
   } catch (error) {
     console.error('Send message error:', error)
     ElMessage.error(t('chat.sendFailed'))
+    messageInput.value = content
   } finally {
     isSending.value = false
+    isLLMTyping.value = false
   }
 }
 
-// ===================== 应用建议 =====================
-const applySuggestion = (error) => {
-  if (error.suggestion) {
-    // 提取纯净的修改后句子，去除 LLM 可能附带的前缀说明
-    let clean = error.suggestion
-    // 去除中文前缀如 "改为：", "建议改为：", "修改为："
-    clean = clean.replace(/^(改为[：:\s]*|建议改为[：:\s]*|修改为[：:\s]*)/i, '')
-    // 去除英文前缀如 "Change to:", "Revised:", "Try:"
-    clean = clean.replace(/^(change\s+to[：:\s]*|revised[：:\s]*|suggested[：:\s]*|try[：:\s]*)/i, '')
-    // 如果被引号包裹，去掉外层引号
-    clean = clean.replace(/^["""](.*)[""\"]$/, '$1')
-    // 截断 "或..." / "or alternatively..." 等备选方案部分
-    const orPattern = /[""\"]?\s*(或更自然的|或者|或\s|;\s*or\s|,\s*or alternatively)/
-    const orMatch = clean.match(orPattern)
-    if (orMatch) {
-      clean = clean.substring(0, orMatch.index)
-    }
-    // 清理残留尾部引号和空格
-    clean = clean.replace(/["""]$/, '').trim()
-
-    messageInput.value = clean || error.suggestion
-    inputErrors.value = []
-    lastCheckedContent = ''
-  }
-}
-
-// ===================== AI Chat 逻辑 =====================
-const sendAiMessage = async (content) => {
-  if (typeof content !== 'string') return
-  const text = content.trim()
-  if (!text || aiLoading.value) return
-
-  aiMessages.value.push({ role: 'user', content: text })
-  aiInput.value = ''
-  aiLoading.value = true
-
-  await nextTick()
-  scrollAiToBottom()
-
+// ===================== 结束会话 =====================
+const endSession = async () => {
   try {
-    const result = await api.aiChat({
-      message: text,
-      chat_user_id: chatStore.currentUser?.id || 0
-    })
-    aiMessages.value.push({ role: 'assistant', content: result.reply })
-  } catch (error) {
-    aiMessages.value.push({ role: 'assistant', content: t('chat.aiError') })
-    console.error('AI chat error:', error)
-  } finally {
-    aiLoading.value = false
-    await nextTick()
-    scrollAiToBottom()
-  }
-}
-
-const scrollAiToBottom = () => {
-  if (aiMessagesContainer.value) {
-    aiMessagesContainer.value.scrollTop = aiMessagesContainer.value.scrollHeight
-  }
-}
-
-// ===================== 工具函数 =====================
-const escapeHtml = (text) => {
-  if (!text) return ''
-  return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/ /g, '&nbsp;')
-}
-
-const renderMarkdown = (text) => {
-  if (!text) return ''
-  // 简单 markdown 渲染
-  let html = escapeHtml(text)
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
-  html = html.replace(/\n/g, '<br>')
-  return html
-}
-
-// ===================== 消息操作 =====================
-const deleteMessage = async (messageId) => {
-  try {
-    await ElMessageBox.confirm(t('chat.deleteConfirm'), t('chat.warning'), {
-      confirmButtonText: t('chat.confirmDelete'),
-      cancelButtonText: t('common.cancel'),
-      type: 'warning'
-    })
-    await api.deleteMessage(messageId)
-    chatStore.removeMessage(messageId)
-    ElMessage.success(t('chat.messageDeleted'))
-  } catch (error) {
-    if (error !== 'cancel') console.error('Delete message error:', error)
-  }
-}
-
-const clearChatHistory = async () => {
-  if (!chatStore.currentUser) return
-  try {
-    await ElMessageBox.confirm(
-        t('chat.clearConfirm', { username: chatStore.currentUser.username }),
-        t('chat.warning'),
-        { confirmButtonText: t('chat.confirmClear'), cancelButtonText: t('common.cancel'), type: 'warning', confirmButtonClass: 'el-button--danger' }
-    )
-    await api.clearChatHistory(chatStore.currentUser.id)
-    chatStore.setCurrentMessages([])
-    ElMessage.success(t('chat.chatCleared'))
-  } catch (error) {
-    if (error !== 'cancel') console.error('Clear chat error:', error)
-  }
-}
-
-const deleteMyMessages = async () => {
-  if (!chatStore.currentUser) return
-  try {
-    await ElMessageBox.confirm(
-        t('chat.deleteMyConfirm', { username: chatStore.currentUser.username }),
-        t('chat.warning'),
-        { confirmButtonText: t('chat.confirmDelete'), cancelButtonText: t('common.cancel'), type: 'warning' }
-    )
-    const result = await api.deleteMyMessages(chatStore.currentUser.id)
-    const messages = await api.getMessages(chatStore.currentUser.id)
-    chatStore.setCurrentMessages(messages)
-    ElMessage.success(t('chat.messagesDeleted', { count: result.deleted_count }))
-  } catch (error) {
-    if (error !== 'cancel') console.error('Delete my messages error:', error)
-  }
-}
-
-const handleLogout = async () => {
-  try {
-    await ElMessageBox.confirm(t('chat.logoutConfirm'), t('chat.hint'), {
+    await ElMessageBox.confirm(t('chat.endSessionConfirm'), t('chat.hint'), {
       confirmButtonText: t('common.confirm'),
       cancelButtonText: t('common.cancel'),
       type: 'warning'
     })
-    userStore.logout()
-    wsManager.disconnect()
-    ElMessage.success(t('chat.logoutSuccess'))
-    router.push('/login')
-  } catch (error) { /* cancelled */ }
+
+    if (countdownTimer) clearInterval(countdownTimer)
+    sessionActive.value = false
+    summaryLoading.value = true
+    showSummary.value = true
+    autoEndReason.value = ''
+
+    const data = await api.endSession(sessionStore.currentSession.id)
+    summaryText.value = data.summary_feedback || t('feedback.noSummary')
+
+    if (sessionStore.currentSession) {
+      sessionStore.currentSession.is_active = false
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('End session error:', error)
+      ElMessage.error(t('chat.endSessionFailed'))
+    }
+    showSummary.value = false
+    sessionActive.value = true
+  } finally {
+    summaryLoading.value = false
+  }
+}
+
+const goToSetup = () => {
+  sessionStore.clearSession()
+  router.push('/setup')
+}
+
+// ===================== 工具函数 =====================
+const isProblematicType = (errorType) => {
+  return errorType === '严重语用语言失误' ||
+    errorType === '严重社会语用失误' ||
+    errorType === '语用语言失误和社会语用失误'
+}
+
+const getErrorClass = (errorType) => {
+  return isProblematicType(errorType) ? 'error-problematic' : 'error-improvable'
+}
+
+const getErrorTypeShort = (errorType) => {
+  if (!errorType) return ''
+  const map = {
+    '语用语言失误': t('chat.errorShort1'),
+    '社会语用失误': t('chat.errorShort2'),
+    '严重语用语言失误': t('chat.errorShort3'),
+    '严重社会语用失误': t('chat.errorShort4'),
+    '语用语言失误和社会语用失误': t('chat.errorShort5'),
+  }
+  return map[errorType] || errorType
+}
+
+const getLanguageName = (lang) => {
+  const map = { EN: 'English', ZH: '中文', JP: '日本語', KR: '한국어', FR: 'Français', DE: 'Deutsch' }
+  return map[lang] || lang || ''
+}
+
+const getInputPlaceholder = () => {
+  if (!sessionActive.value) return ''
+  if (!sessionStore.currentSession) return t('chat.inputPlaceholder')
+  const lang = getLanguageName(sessionStore.currentSession.target_language)
+  if (sessionStore.currentSession.mode === 'user_l2') {
+    return t('chat.inputPlaceholderL2', { lang })
+  }
+  return t('chat.inputPlaceholderNative')
+}
+
+const getWelcomeMessage = () => {
+  if (!sessionStore.currentSession) return ''
+  const lang = getLanguageName(sessionStore.currentSession.target_language)
+  const rel = sessionStore.currentSession.relationship_type
+  const topic = sessionStore.currentSession.topic
+  if (sessionStore.currentSession.mode === 'user_l2') {
+    return t('chat.welcomeUserL2', { lang, rel, topic })
+  }
+  return t('chat.welcomeLLML2', { lang, rel, topic })
 }
 
 const scrollToBottom = () => {
@@ -753,6 +540,7 @@ const scrollToBottom = () => {
 }
 
 const formatMessageTime = (timestamp) => {
+  if (!timestamp) return ''
   const date = new Date(timestamp)
   const now = new Date()
   const diff = now - date
@@ -763,10 +551,44 @@ const formatMessageTime = (timestamp) => {
   }
   return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
+
+const escapeHtml = (text) => {
+  if (!text) return ''
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+const renderMarkdown = (text) => {
+  if (!text) return ''
+  let html = escapeHtml(text)
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
+  html = html.replace(/\n/g, '<br>')
+  return html
+}
+
+const handleLogout = async () => {
+  try {
+    await ElMessageBox.confirm(t('chat.logoutConfirm'), t('chat.hint'), {
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning'
+    })
+    if (countdownTimer) clearInterval(countdownTimer)
+    userStore.logout()
+    sessionStore.clearSession()
+    router.push('/login')
+  } catch { /* cancelled */ }
+}
+
+watch(() => sessionStore.messages.length, async () => {
+  await nextTick()
+  scrollToBottom()
+})
 </script>
 
 <style scoped>
-/* ===================== 整体布局 ===================== */
 .chat-container {
   display: flex;
   height: 100vh;
@@ -774,15 +596,16 @@ const formatMessageTime = (timestamp) => {
   overflow: hidden;
 }
 
-/* ===================== 左侧用户列表 ===================== */
+/* ===================== 左侧会话信息面板 ===================== */
 .sidebar {
-  width: 280px;
-  min-width: 280px;
+  width: 260px;
+  min-width: 260px;
   background: white;
   border-right: 1px solid #e4e7ed;
   display: flex;
   flex-direction: column;
 }
+
 .sidebar-header {
   padding: 16px;
   border-bottom: 1px solid #e4e7ed;
@@ -790,47 +613,105 @@ const formatMessageTime = (timestamp) => {
   justify-content: space-between;
   align-items: center;
 }
+
 .sidebar-header h2 {
   margin: 0;
   font-size: 16px;
   color: #303133;
 }
+
 .header-actions {
   display: flex;
   gap: 6px;
 }
-.search-box {
-  padding: 12px;
+
+.session-info {
+  padding: 16px;
+  flex: 1;
 }
-.connection-status {
+
+.session-info-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.session-info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.info-label {
+  color: #909399;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.info-value {
+  color: #303133;
+  font-weight: 500;
+}
+
+.round-count {
+  font-size: 18px;
+  font-weight: 700;
+  color: #409eff;
+}
+
+.rounds-limit {
+  font-size: 14px;
+  color: #909399;
+}
+
+.timer-info {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
   font-size: 12px;
-  background: #f5f7fa;
+  color: #909399;
+  padding: 6px 10px;
+  background: #f4f4f5;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.timer-info.timer-warning {
+  color: #e6a23c;
+  background: #fdf6ec;
+}
+
+.end-session-btn,
+.new-session-btn {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.error-stats {
+  padding: 12px 16px;
   border-top: 1px solid #e4e7ed;
-  border-bottom: 1px solid #e4e7ed;
+  background: #fdf6ec;
 }
-.connection-status.connected { color: #67c23a; }
-.connection-status.disconnected { color: #f56c6c; }
-.user-list {
-  flex: 1;
-  overflow-y: auto;
+
+.error-stats-title {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 6px;
 }
-.user-item {
+
+.error-stats-count {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  cursor: pointer;
-  transition: background 0.2s;
+  gap: 6px;
+  font-size: 13px;
+  color: #e6a23c;
+  font-weight: 500;
 }
-.user-item:hover { background: #f5f7fa; }
-.user-item.active { background: #ecf5ff; }
-.user-info { flex: 1; }
-.username { font-size: 14px; color: #303133; font-weight: 500; }
-.country { font-size: 12px; color: #909399; margin-top: 2px; }
 
 /* ===================== 中间聊天区域 ===================== */
 .chat-area {
@@ -839,11 +720,13 @@ const formatMessageTime = (timestamp) => {
   flex-direction: column;
   min-width: 0;
 }
+
 .chat-content {
   display: flex;
   flex-direction: column;
   height: 100vh;
 }
+
 .chat-header {
   background: white;
   padding: 12px 20px;
@@ -852,35 +735,133 @@ const formatMessageTime = (timestamp) => {
   justify-content: space-between;
   align-items: center;
 }
+
 .chat-user-info {
   display: flex;
   align-items: center;
   gap: 12px;
 }
+
+.bot-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.username {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.country {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.target-lang {
+  font-size: 12px;
+  color: #909399;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .messages-container {
   flex: 1;
   padding: 16px 20px;
   overflow-y: auto;
   background: #f5f5f5;
 }
+
+/* ===================== 欢迎页 ===================== */
+.welcome-message {
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.welcome-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.welcome-content h3 {
+  font-size: 18px;
+  color: #303133;
+  margin: 12px 0 8px;
+}
+
+.welcome-content p {
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.welcome-tips {
+  background: #ecf5ff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 12px;
+  text-align: left;
+}
+
+.welcome-tips p {
+  margin: 0;
+  font-size: 13px;
+  color: #409eff;
+}
+
+/* ===================== 消息气泡 ===================== */
 .message-wrapper {
   margin-bottom: 16px;
   display: flex;
+  align-items: flex-end;
+  gap: 8px;
 }
+
 .message-wrapper.message-sent {
   justify-content: flex-end;
 }
+
+.message-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bot-msg-avatar {
+  align-self: flex-end;
+}
+
 .message {
   max-width: 65%;
   background: white;
-  border-radius: 12px;
+  border-radius: 12px 12px 12px 4px;
   padding: 10px 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
+
 .message-sent .message {
   background: #409eff;
   color: white;
+  border-radius: 12px 12px 4px 12px;
 }
+
 .message-header {
   display: flex;
   justify-content: space-between;
@@ -889,136 +870,119 @@ const formatMessageTime = (timestamp) => {
   font-size: 11px;
   opacity: 0.7;
 }
-.message-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+
+.message-sender {
+  font-weight: 600;
 }
+
 .message-text {
   word-break: break-word;
   line-height: 1.6;
   font-size: 14px;
 }
-.delete-btn { padding: 2px; }
-.empty-messages, .empty-chat {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
+
+.message-error-badge {
+  margin-top: 6px;
 }
 
-/* ===================== 接收方错误标识 ===================== */
 .error-indicator {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
   cursor: pointer;
-  transition: transform 0.2s;
-}
-.error-indicator:hover {
-  transform: scale(1.2);
-}
-.error-indicator.improvable {
-  color: #e6a23c;
-  background: #fdf6ec;
-}
-.error-indicator.problematic {
-  color: #f56c6c;
-  background: #fef0f0;
 }
 
-.error-tooltip-content {
-  max-width: 320px;
-  max-height: 300px;
-  overflow-y: auto;
+.error-improvable {
+  background: #fdf6ec;
+  color: #e6a23c;
+  border: 1px solid #f5dab1;
 }
-.error-tooltip-header {
-  margin-bottom: 8px;
+
+.error-problematic {
+  background: #fef0f0;
+  color: #f56c6c;
+  border: 1px solid #fbc4c4;
 }
-.error-tooltip-section {
-  margin-bottom: 8px;
+
+/* 打字动画 */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 16px;
+  background: white;
+  border-radius: 12px 12px 12px 4px;
 }
-.error-tooltip-label {
-  font-size: 12px;
-  color: #909399;
-  margin-bottom: 4px;
+
+.typing-indicator span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #909399;
+  animation: typing 1.2s infinite;
 }
-.error-tooltip-text {
+
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-6px); opacity: 1; }
+}
+
+/* ===================== 错误详情弹出框 ===================== */
+.error-popover {
   font-size: 13px;
-  line-height: 1.5;
-  color: #303133;
 }
-.error-tooltip-text.suggestion {
+
+.error-popover-type {
+  margin-bottom: 10px;
+}
+
+.error-popover-section {
+  margin-bottom: 8px;
+}
+
+.error-popover-label {
+  font-size: 11px;
+  color: #909399;
+  margin-bottom: 3px;
+}
+
+.error-popover-text {
+  color: #303133;
+  line-height: 1.5;
+}
+
+.suggestion-text {
   color: #67c23a;
-  padding: 6px 8px;
+  padding: 4px 8px;
   background: #f0f9eb;
   border-radius: 4px;
-  word-break: break-word;
-  line-height: 1.6;
-}
-.error-tooltip-text.explanation {
-  color: #606266;
-  padding: 6px 8px;
-  background: #f4f4f5;
-  border-radius: 4px;
-  max-height: 150px;
-  overflow-y: auto;
-  word-break: break-word;
-  line-height: 1.6;
 }
 
-/* ===================== Grammarly 风格输入区域 ===================== */
+/* ===================== 输入区域 ===================== */
 .input-area {
   background: white;
   border-top: 1px solid #e4e7ed;
-  padding: 12px 20px 8px;
+  padding: 12px 20px 12px;
 }
+
 .input-wrapper {
   border: 2px solid #dcdfe6;
   border-radius: 8px;
   overflow: hidden;
   transition: border-color 0.3s;
 }
+
 .input-wrapper:focus-within {
   border-color: #409eff;
 }
-.input-editor-container {
-  position: relative;
-  min-height: 80px;
-  max-height: 150px;
-}
-.underline-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 10px 14px;
-  font-size: 14px;
-  line-height: 1.6;
-  font-family: inherit;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow: hidden;
-  color: transparent;
-  pointer-events: none;
-  z-index: 0;
-}
-.underline-layer :deep(.underline-improvable) {
-  background: transparent;
-  border-bottom: 3px solid #e6a23c;  /* 橙色 */
-  color: transparent;
-}
-.underline-layer :deep(.underline-problematic) {
-  background: transparent;
-  border-bottom: 3px solid #f56c6c;  /* 红色 */
-  color: transparent;
-}
+
 .input-editor {
-  position: relative;
   width: 100%;
   min-height: 80px;
   max-height: 150px;
@@ -1029,10 +993,11 @@ const formatMessageTime = (timestamp) => {
   line-height: 1.6;
   font-family: inherit;
   resize: none;
-  background: transparent;
-  z-index: 1;
+  background: white;
   overflow-y: auto;
+  box-sizing: border-box;
 }
+
 .input-status-bar {
   display: flex;
   justify-content: space-between;
@@ -1041,171 +1006,75 @@ const formatMessageTime = (timestamp) => {
   background: #fafafa;
   border-top: 1px solid #f0f0f0;
 }
+
 .status-left {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
 }
-.checking-status { color: #909399; }
-.error-count { color: #e6a23c; }
-.no-error { color: #67c23a; }
 
-/* ===================== 错误详情卡片 ===================== */
-.error-cards {
-  margin-top: 8px;
-  max-height: 180px;
-  overflow-y: auto;
-}
-.error-card {
-  padding: 10px 14px;
-  border-radius: 8px;
-  margin-bottom: 6px;
-  border-left: 4px solid;
-}
-.error-card.improvable-card {
-  background: #fdf6ec;
-  border-left-color: #e6a23c;
-}
-.error-card.problematic-card {
-  background: #fef0f0;
-  border-left-color: #f56c6c;
-}
-.error-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.error-card-body {
-  font-size: 13px;
-  line-height: 1.5;
-}
-.error-card-body .label {
-  font-weight: 600;
-  color: #606266;
-  margin-right: 4px;
-}
-.error-card-body .error-text {
-  text-decoration: line-through;
+.session-ended-hint {
   color: #909399;
-}
-.error-card-body .suggestion-text {
-  color: #67c23a;
-  font-weight: 500;
-}
-.error-card-body > div {
-  margin-bottom: 4px;
-}
-.error-original, .error-suggestion, .error-explanation {
-  margin-bottom: 4px;
+  font-style: italic;
 }
 
-/* ===================== 右侧 AI Chat ===================== */
-.ai-panel {
-  width: 340px;
-  min-width: 340px;
-  background: white;
-  border-left: 1px solid #e4e7ed;
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s, min-width 0.3s;
+/* ===================== 反馈对话框 ===================== */
+.feedback-content {
+  padding: 4px 0;
 }
-.ai-panel.collapsed {
-  width: 48px;
-  min-width: 48px;
-}
-.ai-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 14px;
-  border-bottom: 1px solid #e4e7ed;
-  cursor: pointer;
-}
-.ai-panel-title {
+
+.auto-end-notice {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
-}
-.ai-panel.collapsed .ai-panel-title span {
-  display: none;
-}
-.ai-panel-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.ai-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-}
-.ai-welcome {
-  text-align: center;
-  padding: 40px 16px;
-  color: #909399;
-}
-.ai-welcome p {
-  margin: 12px 0;
-  font-size: 13px;
-}
-.ai-suggestions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
-  width: 100%;
-}
-
-/* 让 suggestion 按钮文字自动换行、边框随内容伸缩 */
-.ai-suggestions .el-button {
-  white-space: normal !important;
-  word-break: break-word;
-  height: auto !important;
-  line-height: 1.5 !important;
-  padding: 8px 14px !important;
-  width: 100%;
-  text-align: center;
-}
-.ai-message-wrapper {
-  margin-bottom: 12px;
-  display: flex;
-}
-.ai-user-msg {
-  justify-content: flex-end;
-}
-.ai-message {
-  max-width: 90%;
-  border-radius: 12px;
   padding: 8px 12px;
+  background: #ecf5ff;
+  border-radius: 6px;
+  margin-bottom: 12px;
   font-size: 13px;
-  line-height: 1.6;
+  color: #409eff;
 }
-.ai-user-msg .ai-message {
-  background: #409eff;
-  color: white;
-}
-.ai-bot-msg .ai-message {
-  background: #f4f4f5;
-  color: #303133;
-}
-.ai-message-content :deep(strong) { font-weight: 600; }
-.ai-input-area {
-  padding: 12px;
-  border-top: 1px solid #e4e7ed;
-}
-</style>
 
-<style>
-/* 全局 tooltip 样式 */
-.error-tooltip-popper {
-  max-width: 360px !important;
-  max-height: 420px !important;
-  overflow: hidden !important;
+.feedback-text {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #303133;
+  white-space: pre-wrap;
+}
+
+.feedback-text :deep(strong) {
+  color: #409eff;
+}
+
+.feedback-stats {
+  display: flex;
+  justify-content: space-around;
+  padding: 16px 0;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-num {
+  font-size: 32px;
+  font-weight: 700;
+  color: #409eff;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.summary-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: #909399;
 }
 </style>

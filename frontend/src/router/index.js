@@ -4,13 +4,19 @@ import { useUserStore } from '@/stores/user'
 const routes = [
     {
         path: '/',
-        redirect: '/chat'
+        redirect: '/setup'
     },
     {
         path: '/login',
         name: 'Login',
         component: () => import('@/views/Login.vue'),
         meta: { requiresAuth: false }
+    },
+    {
+        path: '/setup',
+        name: 'Setup',
+        component: () => import('@/views/SessionSetup.vue'),
+        meta: { requiresAuth: true }
     },
     {
         path: '/chat',
@@ -59,9 +65,9 @@ router.beforeEach((to, from, next) => {
         }
     }
 
-    // 如果已登录用户访问登录页，重定向到主页
+    // 如果已登录用户访问登录页，重定向到设置页
     if (to.path === '/login' && userStore.token) {
-        next('/')
+        next('/setup')
         return
     }
 

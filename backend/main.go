@@ -19,9 +19,6 @@ func main() {
 	hub := newHub()
 	go hub.run()
 
-	// 设置全局 hub
-	globalHub = hub
-
 	// 初始化路由
 	r := gin.Default()
 
@@ -43,22 +40,21 @@ func main() {
 			auth.GET("/users", getUsers)
 			auth.GET("/users/:id", getUserInfo)
 
-			// 消息相关
-			auth.GET("/messages/:userId", getMessages)
-			auth.POST("/messages", sendMessage)
-			auth.POST("/messages/check", checkMessageBeforeSend)
-			auth.DELETE("/messages/:id", deleteMessage)
-			auth.DELETE("/messages/clear/:userId", clearChatHistory)
-			auth.DELETE("/messages/mine/:userId", deleteMyMessages)
-
-			// 🆕 实时检测接口 (Grammarly 风格)
-			auth.POST("/messages/realtime-check", realtimeCheck)
-
-			// 🆕 获取消息关联的语用错误 (接收方使用)
+			// 获取消息关联的语用错误
 			auth.POST("/messages/errors", getMessageErrorsByIds)
 
-			// 🆕 AI Chat 接口
-			auth.POST("/ai/chat", aiChat)
+			// 会话管理接口
+			auth.POST("/sessions", createSession)
+			auth.GET("/sessions/active", getActiveSession)
+			auth.POST("/sessions/:id/end", endSession)
+			auth.GET("/sessions/:id/messages", getSessionMessages)
+			auth.GET("/sessions/:id/feedback", getSessionFeedback)
+
+			// LLM 对话接口
+			auth.POST("/llm/message", sendLLMMessage)
+
+			// LLM Bot 信息接口
+			auth.GET("/bot/info", getLLMBotInfo)
 
 			// 语法错误记录
 			auth.GET("/grammar-errors", getGrammarErrors)
@@ -96,13 +92,38 @@ func initDB() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	// 自动迁移 - 🆕 新增 AIChatHistory
-	db.AutoMigrate(&User{}, &Message{}, &GrammarError{}, &AIChatHistory{})
+	// 自动迁移
+	db.AutoMigrate(&User{}, &Message{}, &GrammarError{}, &ConversationSession{})
 
 	// 创建默认管理员账号
 	createDefaultAdmin()
 
+	// 创建 LLM Bot 用户
+	createLLMBotUser()
+
 	log.Println("Database connected and migrated")
+}
+
+func createLLMBotUser() {
+	var botUser User
+	if err := db.Where("role = ?", RoleBot).First(&botUser).Error; err != nil {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("llmbot_not_login"), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("Failed to hash bot password: %v", err)
+			return
+		}
+		bot := User{
+			Username: "LLM助手",
+			Password: string(hashedPassword),
+			Country:  "OTHER",
+			Role:     RoleBot,
+		}
+		if err := db.Create(&bot).Error; err != nil {
+			log.Printf("Failed to create LLM bot user: %v", err)
+		} else {
+			log.Printf("LLM bot user created with ID %d", bot.ID)
+		}
+	}
 }
 
 func createDefaultAdmin() {

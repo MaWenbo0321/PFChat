@@ -45,6 +45,19 @@ func IsProblematicErrorType(errorType string) bool {
 const (
 	RoleUser  = "user"
 	RoleAdmin = "admin"
+	RoleBot   = "bot"
+)
+
+// 对话模式常量
+const (
+	ModeUserL2 = "user_l2" // 用户使用第二语言，LLM作为母语者
+	ModeLLML2  = "llm_l2"  // LLM使用第二语言，模拟非流利说话者
+)
+
+// 会话结束模式常量
+const (
+	FeedbackComplete = "complete"  // 完整对话：用户手动结束或10分钟超时
+	FeedbackRounds5  = "rounds_5" // 五轮对话：5轮后自动结束
 )
 
 type User struct {
@@ -65,11 +78,34 @@ type Message struct {
 	ReceiverID uint      `json:"receiver_id" gorm:"not null;index"`
 	Content    string    `json:"content" gorm:"type:text;not null"`
 	IsRead     bool      `json:"is_read" gorm:"default:false"`
+	SessionID  uint      `json:"session_id" gorm:"index;default:0"`
+	Role       string    `json:"role" gorm:"type:varchar(20);default:'user'"` // "user" or "llm"
 	CreatedAt  time.Time `json:"created_at"`
 
 	// 关联
 	Sender   User `json:"sender" gorm:"foreignKey:SenderID"`
 	Receiver User `json:"receiver" gorm:"foreignKey:ReceiverID"`
+}
+
+// ConversationSession 对话会话
+type ConversationSession struct {
+	ID               uint      `json:"id" gorm:"primaryKey"`
+	UserID           uint      `json:"user_id" gorm:"not null;index"`
+	BotUserID        uint      `json:"bot_user_id" gorm:"not null"`
+	RelationshipType string    `json:"relationship_type" gorm:"type:varchar(50)"`
+	Topic            string    `json:"topic" gorm:"type:varchar(100)"`
+	Mode             string    `json:"mode" gorm:"type:varchar(20)"` // ModeUserL2 or ModeLLML2
+	TargetLanguage   string    `json:"target_language" gorm:"type:varchar(10)"`
+	FeedbackMode     string    `json:"feedback_mode" gorm:"type:varchar(20)"` // FeedbackComplete or FeedbackRounds5
+	RoundCount       int       `json:"round_count" gorm:"default:0"`
+	IsActive         bool      `json:"is_active" gorm:"default:true"`
+	SummaryFeedback  string    `json:"summary_feedback" gorm:"type:text"` // 会话结束汇总
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+func (ConversationSession) TableName() string {
+	return "conversation_sessions"
 }
 
 // GrammarError 语法错误记录模型
@@ -97,28 +133,6 @@ func (ge *GrammarError) BeforeCreate(tx *gorm.DB) error {
 		ge.ErrorType = ErrorTypePragmalinguistic
 	}
 	return nil
-}
-
-// AIChatHistory AI对话历史
-type AIChatHistory struct {
-	ID         uint      `json:"id" gorm:"primaryKey"`
-	UserID     uint      `json:"user_id" gorm:"not null;index"`
-	ChatUserID uint      `json:"chat_user_id" gorm:"index"` // 当前聊天对象ID (上下文)
-	Role       string    `json:"role" gorm:"type:varchar(20);not null"`
-	Content    string    `json:"content" gorm:"type:text;not null"`
-	CreatedAt  time.Time `json:"created_at"`
-}
-
-func (AIChatHistory) TableName() string {
-	return "ai_chat_history"
-}
-
-// 语法检查结果
-type GrammarCheckResult struct {
-	HasError    bool   `json:"has_error"`
-	Suggestion  string `json:"suggestion"`
-	Explanation string `json:"explanation"`
-	MessageID   uint   `json:"message_id"`
 }
 
 // 请求/响应结构
@@ -154,6 +168,10 @@ func (u *User) IsAdmin() bool {
 
 func (u *User) IsUser() bool {
 	return u.Role == RoleUser
+}
+
+func (u *User) IsBot() bool {
+	return u.Role == RoleBot
 }
 
 type WSMessage struct {

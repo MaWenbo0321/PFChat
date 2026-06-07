@@ -158,7 +158,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
@@ -175,8 +175,7 @@ const userStore = useUserStore()
 
 const loading = ref(false)
 const searchKeyword = ref('')
-const users = ref([])
-const total = ref(0)
+const allUsers = ref([])
 const currentPage = ref(1)
 const pageSize = ref(20)
 
@@ -186,6 +185,22 @@ const stats = ref({
   regularUsers: 0,
   totalMessages: 0,
   totalGrammarErrors: 0
+})
+
+const filteredUsers = computed(() => {
+  const kw = searchKeyword.value.toLowerCase()
+  if (!kw) return allUsers.value
+  return allUsers.value.filter(u =>
+    u.username.toLowerCase().includes(kw) ||
+    (u.country && u.country.toLowerCase().includes(kw))
+  )
+})
+
+const total = computed(() => filteredUsers.value.length)
+
+const users = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredUsers.value.slice(start, start + pageSize.value)
 })
 
 onMounted(async () => {
@@ -205,14 +220,8 @@ const loadStats = async () => {
 const loadUsers = async () => {
   loading.value = true
   try {
-    const result = await api.getAllUsersForAdmin({
-      page: currentPage.value,
-      page_size: pageSize.value,
-      search: searchKeyword.value
-    })
-
-    users.value = result.users
-    total.value = result.total
+    const result = await api.getAllUsersForAdmin()
+    allUsers.value = result.users
   } catch (error) {
     console.error('Load users error:', error)
     ElMessage.error('加载用户列表失败')
@@ -223,18 +232,15 @@ const loadUsers = async () => {
 
 const searchUsers = () => {
   currentPage.value = 1
-  loadUsers()
 }
 
 const handleSizeChange = (newSize) => {
   pageSize.value = newSize
   currentPage.value = 1
-  loadUsers()
 }
 
 const handleCurrentChange = (newPage) => {
   currentPage.value = newPage
-  loadUsers()
 }
 
 const promoteToAdmin = async (user) => {
@@ -249,7 +255,7 @@ const promoteToAdmin = async (user) => {
         }
     )
 
-    await api.updateUserRole(user.id, { role: 'admin' })
+    await api.updateUserRole(user.id, 'admin')
     ElMessage.success('用户已提升为管理员')
     await loadUsers()
     await loadStats()
@@ -272,7 +278,7 @@ const demoteToUser = async (user) => {
         }
     )
 
-    await api.updateUserRole(user.id, { role: 'user' })
+    await api.updateUserRole(user.id, 'user')
     ElMessage.success('管理员已降级为普通用户')
     await loadUsers()
     await loadStats()
