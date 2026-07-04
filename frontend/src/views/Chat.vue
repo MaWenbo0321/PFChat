@@ -84,10 +84,10 @@
           </div>
           <div class="header-right">
             <el-tag v-if="sessionStore.currentSession?.feedback_mode === 'complete'" size="small" type="info">
-              {{ $t('setup.feedbackPeriodic') }}
+              {{ $t('setup.feedbackComplete') }}
             </el-tag>
             <el-tag v-else size="small" type="success">
-              {{ $t('setup.feedbackSummary') }}
+              {{ $t('setup.feedbackRounds5') }}
             </el-tag>
           </div>
         </div>

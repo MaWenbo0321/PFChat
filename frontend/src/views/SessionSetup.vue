@@ -67,8 +67,8 @@
               @click="form.feedback_mode = 'complete'"
             >
               <el-icon :size="24" color="#409eff"><Document /></el-icon>
-              <div class="feedback-card-title">{{ $t('setup.feedbackPeriodic') }}</div>
-              <div class="feedback-card-desc">{{ $t('setup.feedbackPeriodicDesc') }}</div>
+              <div class="feedback-card-title">{{ $t('setup.feedbackComplete') }}</div>
+              <div class="feedback-card-desc">{{ $t('setup.feedbackCompleteDesc') }}</div>
             </div>
             <div
               class="feedback-card"
@@ -76,8 +76,8 @@
               @click="form.feedback_mode = 'rounds_5'"
             >
               <el-icon :size="24" color="#67c23a"><Timer /></el-icon>
-              <div class="feedback-card-title">{{ $t('setup.feedbackSummary') }}</div>
-              <div class="feedback-card-desc">{{ $t('setup.feedbackSummaryDesc') }}</div>
+              <div class="feedback-card-title">{{ $t('setup.feedbackRounds5') }}</div>
+              <div class="feedback-card-desc">{{ $t('setup.feedbackRounds5Desc') }}</div>
             </div>
           </div>
         </el-form-item>
