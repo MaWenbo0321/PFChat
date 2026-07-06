@@ -89,10 +89,15 @@
                   shadow="hover"
               >
                 <div class="error-header">
-                  <span class="error-time">
-                    <el-icon><Clock /></el-icon>
-                    {{ formatDate(error.created_at) }}
-                  </span>
+                  <div class="error-meta">
+                    <span class="error-time">
+                      <el-icon><Clock /></el-icon>
+                      {{ formatDate(error.created_at) }}
+                    </span>
+                    <el-tag size="small" :type="error.source_role === 'llm' ? 'success' : 'primary'" effect="plain">
+                      {{ getSourceRoleLabel(error.source_role) }}
+                    </el-tag>
+                  </div>
                   <div class="error-actions">
                     <el-dropdown @command="(cmd) => handleCommand(cmd, error)">
                       <el-button size="small" :icon="MoreFilled" text />
@@ -237,6 +242,12 @@ const isProblematicType = (errorType) => {
       errorType === '语用语言失误和社会语用失误'
 }
 
+const getSourceRoleLabel = (sourceRole) => {
+  if (sourceRole === 'llm') {
+    return locale.value === 'zh-CN' ? 'LLM模拟学习者' : 'LLM learner'
+  }
+  return locale.value === 'zh-CN' ? '用户' : 'User'
+}
 // 获取错误类型的 tag 颜色
 const getErrorTagType = (errorType) => {
   if (isProblematicType(errorType)) {
@@ -279,7 +290,8 @@ const filteredErrors = computed(() => {
   return errors.value.filter(e =>
       e.original_text.toLowerCase().includes(keyword) ||
       e.llm_suggestion.toLowerCase().includes(keyword) ||
-      e.llm_explanation.toLowerCase().includes(keyword)
+      e.llm_explanation.toLowerCase().includes(keyword) ||
+      getSourceRoleLabel(e.source_role).toLowerCase().includes(keyword)
   )
 })
 
@@ -315,7 +327,7 @@ const loadErrors = async (errorType = 'all') => {
     const deduped = []
     const seen = new Set()
     for (const err of rawErrors) {
-      const key = `${err.original_text}||${err.error_type}`
+      const key = `${err.source_role || 'user'}||${err.original_text}||${err.error_type}`
       if (!seen.has(key)) {
         seen.add(key)
         deduped.push(err)
@@ -570,6 +582,12 @@ const formatDate = (dateString) => {
   border-bottom: 1px solid #ebeef5;
 }
 
+.error-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .error-time {
   display: flex;
   align-items: center;
@@ -638,3 +656,4 @@ const formatDate = (dateString) => {
   border-radius: 4px;
 }
 </style>
+

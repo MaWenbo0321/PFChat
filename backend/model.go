@@ -48,6 +48,12 @@ const (
 	RoleBot   = "bot"
 )
 
+// 语用错误来源
+const (
+	ErrorSourceUser = "user"
+	ErrorSourceLLM  = "llm"
+)
+
 // 对话模式常量
 const (
 	ModeUserL2 = "user_l2" // 用户使用第二语言，LLM作为母语者
@@ -56,7 +62,7 @@ const (
 
 // 会话结束模式常量
 const (
-	FeedbackComplete = "complete"  // 完整对话：用户手动结束或10分钟超时
+	FeedbackComplete = "complete" // 完整对话：用户手动结束或10分钟超时
 	FeedbackRounds5  = "rounds_5" // 五轮对话：5轮后自动结束
 )
 
@@ -110,14 +116,17 @@ func (ConversationSession) TableName() string {
 
 // GrammarError 语法错误记录模型
 type GrammarError struct {
-	ID             uint      `json:"id" gorm:"primaryKey"`
-	UserID         uint      `json:"user_id" gorm:"not null;index"`
-	MessageID      uint      `json:"message_id" gorm:"index"`
-	OriginalText   string    `json:"original_text" gorm:"type:text;not null"`
-	LLMSuggestion  string    `json:"llm_suggestion" gorm:"type:text"`
-	LLMExplanation string    `json:"llm_explanation" gorm:"type:text"`
-	ErrorType      string    `json:"error_type" gorm:"type:varchar(50);not null;default:'语用语言失误';index"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID                uint      `json:"id" gorm:"primaryKey"`
+	UserID            uint      `json:"user_id" gorm:"not null;index"`
+	SessionID         uint      `json:"session_id" gorm:"index;default:0"`
+	MessageID         uint      `json:"message_id" gorm:"index"`
+	SourceRole        string    `json:"source_role" gorm:"type:varchar(20);not null;default:'user';index"`
+	OriginalText      string    `json:"original_text" gorm:"type:text;not null"`
+	LLMSuggestion     string    `json:"llm_suggestion" gorm:"type:text"`
+	LLMExplanation    string    `json:"llm_explanation" gorm:"type:text"`
+	ErrorType         string    `json:"error_type" gorm:"type:varchar(50);not null;default:'语用语言失误';index"`
+	OverallEvaluation string    `json:"overall_evaluation" gorm:"type:varchar(20);index"`
+	CreatedAt         time.Time `json:"created_at"`
 
 	User User `json:"user" gorm:"foreignKey:UserID"`
 }
@@ -131,6 +140,9 @@ func (GrammarError) TableName() string {
 func (ge *GrammarError) BeforeCreate(tx *gorm.DB) error {
 	if ge.ErrorType == "" {
 		ge.ErrorType = ErrorTypePragmalinguistic
+	}
+	if ge.SourceRole == "" {
+		ge.SourceRole = ErrorSourceUser
 	}
 	return nil
 }

@@ -7,17 +7,21 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // DashScope API 配置
 const (
-	dashScopeAPIURL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
-	defaultModel    = "qwen3.7-plus"
+	dashScopeDefaultAPIURL  = "https://llm-26cli7e69esmbtok.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+	dashScopeGenerationPath = "/services/aigc/multimodal-generation/generation"
+	defaultModel            = "qwen3.7-plus"
+	fallbackDashScopeAPIKey = "sk-8ab77da79b894ba6beb61c9190c74602"
 )
 
-// DashScope 请求结构
+// DashScope 请求结构（原生 HTTP 调用格式）
 type DashScopeRequest struct {
 	Model      string              `json:"model"`
 	Input      DashScopeInput      `json:"input"`
@@ -30,34 +34,79 @@ type DashScopeInput struct {
 
 type DashScopeMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"`
+}
+
+type DashScopeContentPart struct {
+	Text string `json:"text,omitempty"`
 }
 
 type DashScopeParameters struct {
-	ResultFormat string  `json:"result_format,omitempty"`
-	Temperature  float64 `json:"temperature,omitempty"`
-	MaxTokens    int     `json:"max_tokens,omitempty"`
+	ResultFormat        string                   `json:"result_format,omitempty"`
+	Temperature         float64                  `json:"temperature,omitempty"`
+	MaxCompletionTokens int                      `json:"max_completion_tokens,omitempty"`
+	ResponseFormat      *DashScopeResponseFormat `json:"response_format,omitempty"`
+	EnableThinking      *bool                    `json:"enable_thinking,omitempty"`
 }
 
-// DashScope 响应结构
+type DashScopeResponseFormat struct {
+	Type string `json:"type"`
+}
+
+type DashScopeStatusCode int
+
+func (c *DashScopeStatusCode) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || bytes.Equal(data, []byte("null")) {
+		*c = 0
+		return nil
+	}
+	var code int
+	if err := json.Unmarshal(data, &code); err == nil {
+		*c = DashScopeStatusCode(code)
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(data, &text); err != nil {
+		return err
+	}
+	if strings.TrimSpace(text) == "" {
+		*c = 0
+		return nil
+	}
+	parsed, err := strconv.Atoi(text)
+	if err != nil {
+		return err
+	}
+	*c = DashScopeStatusCode(parsed)
+	return nil
+}
+
+// DashScope 响应结构（原生 HTTP 调用格式）
 type DashScopeResponse struct {
-	Output struct {
-		Text    string `json:"text,omitempty"`
-		Finish  string `json:"finish_reason,omitempty"`
-		Choices []struct {
-			Message struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			} `json:"message"`
-			FinishReason string `json:"finish_reason"`
+	StatusCode DashScopeStatusCode `json:"status_code"`
+	RequestID  string              `json:"request_id"`
+	Code       string              `json:"code"`
+	Message    string              `json:"message"`
+	Output     struct {
+		Text         string `json:"text,omitempty"`
+		FinishReason string `json:"finish_reason,omitempty"`
+		Choices      []struct {
+			FinishReason string                   `json:"finish_reason"`
+			Message      DashScopeResponseMessage `json:"message"`
 		} `json:"choices,omitempty"`
 	} `json:"output"`
 	Usage struct {
 		InputTokens  int `json:"input_tokens"`
 		OutputTokens int `json:"output_tokens"`
 		TotalTokens  int `json:"total_tokens"`
-	} `json:"usage"`
-	RequestID string `json:"request_id"`
+	} `json:"usage,omitempty"`
+}
+
+type DashScopeResponseMessage struct {
+	Role             string          `json:"role"`
+	Content          json.RawMessage `json:"content"`
+	ReasoningContent string          `json:"reasoning_content,omitempty"`
 }
 
 // GrammarCheckResponse 语用失误检查响应结构 (LLM 返回的 JSON)
@@ -108,46 +157,79 @@ func mapErrorType(result *GrammarCheckResponse) string {
 	}
 }
 
-// buildCombinedPrompt 构建合并的提示词 (新版本 - 基于用户提供的语用学分析prompt)
-func buildCombinedPrompt(history []Message, current Message, sender User, receiver User) string {
+// buildCombinedPrompt 构建 PFChat 语用检测提示词。
+func buildCombinedPrompt(history []Message, current Message, sender User, receiver User, session ConversationSession) string {
 	var sb strings.Builder
 
-	// 【Fix】基于消息实际语言判断，而非发送者国籍
-	// 外国人可能用中文写消息，此时建议也应该用中文；
-	// explanation 则用接收者的母语（或发送者的母语）帮助理解
 	msgLang := detectMessageLanguage(current.Content)
 	isChineseMsg := msgLang == "zh"
+	targetLang := getLanguageFullName(session.TargetLanguage)
+	suggestionLang := getSuggestionLanguageName(msgLang, session.TargetLanguage, isChineseMsg)
+	analysisTarget := getAnalysisTargetName(current.Role, isChineseMsg)
+	explanationCountry := sender.Country
+	if current.Role == ErrorSourceLLM {
+		explanationCountry = receiver.Country
+	}
+	explanationLang := getCountryLanguageName(explanationCountry, isChineseMsg)
 
-	// prompt 框架语言也跟随消息语言（方便 LLM 理解上下文）
 	if isChineseMsg {
-		// 中文 prompt
-		sb.WriteString("你是一位精通语用学和跨文化交际的语言学专家。\n")
-		sb.WriteString("你的任务是分析在线聊天中平等关系交际者（如同学或陌生人）之间的话语。\n\n")
+		sb.WriteString("你是 PFChat 项目中的跨文化语用学评估器。\n")
+		sb.WriteString("PFChat 是一个语言学习聊天练习系统：用户与 LLM Bot 围绕指定关系和主题对话，系统只记录会影响交际效果的语用问题。\n")
+		sb.WriteString(fmt.Sprintf("你的任务是判断“%s”在本次会话上下文中是否存在语用失误，并给出可直接展示在语用问题记录页的 JSON。\n\n", analysisTarget))
 
-		sb.WriteString("重要约束:\n")
-		sb.WriteString("- 只检测真正的语用失误，不纠正语法错误或风格问题\n")
-		sb.WriteString("- 只有当话语可能导致交际失败或冒犯时才标记错误\n")
-		sb.WriteString("- 平等关系中的直接表达通常是可以接受的\n")
-		sb.WriteString("- suggestion 字段只包含修改后的句子，不包含任何解释或前缀\n")
-		sb.WriteString("- 不要包含任何替代选项如 \"或更自然的...\"\n")
-		sb.WriteString("- 不要在 suggestion 中包含任何解释——把解释放在 explanation 字段\n")
-		sb.WriteString("- 只输出最佳的单一修改句子，别的什么都不要\n\n")
+		sb.WriteString("会话上下文:\n")
+		sb.WriteString(fmt.Sprintf("- 会话模式: %s\n", getSessionModePrompt(session.Mode, true)))
+		sb.WriteString(fmt.Sprintf("- 目标/练习语言: %s\n", targetLang))
+		sb.WriteString(fmt.Sprintf("- 对话关系: %s\n", session.RelationshipType))
+		sb.WriteString(fmt.Sprintf("- 对话主题: %s\n", session.Topic))
+		sb.WriteString(fmt.Sprintf("- 发送者国家/地区: %s\n", getCountryName(sender.Country)))
+		sb.WriteString(fmt.Sprintf("- 当前分析对象: %s\n", analysisTarget))
+		sb.WriteString(fmt.Sprintf("- 接收者语言背景: %s\n\n", getCountryName(receiver.Country)))
+
+		sb.WriteString("判定标准:\n")
+		sb.WriteString("- 只检测语用问题，不做普通语法、拼写、词汇或风格润色；只有这些问题改变礼貌、意图或关系处理时才标记。\n")
+		sb.WriteString("- 根据对话关系判断得体性：陌生人、师生、同事/商务关系通常需要更高礼貌度；朋友、同学关系可更自然直接。\n")
+		sb.WriteString("- 根据主题判断场景期待：学术、商务、旅行、文化交流和日常闲聊的表达规范不同。\n")
+		sb.WriteString("- 不要因为学习者表达不够地道就标记错误；只有可能造成冒犯、误解、请求/拒绝/感谢/道歉不当或关系失衡时才标记。\n")
+		sb.WriteString("- 只评价当前分析对象，不把历史消息中的问题归因到当前消息。\n")
+		sb.WriteString("- llm_l2 模式中，LLM Bot 会适当模拟二语学习者的语用问题；如果当前分析对象是 LLM Bot 回复，请识别其故意触发的语用失误。\n")
+		sb.WriteString("- user_l2 模式中，重点评估用户用目标语言与母语者交流时的语用得体性。\n\n")
+
+		sb.WriteString("字段含义:\n")
+		sb.WriteString("- impoliteness: 当前消息是否明显不礼貌、冒犯、命令感过强或缺少必要缓和。\n")
+		sb.WriteString("- linguistic_pragmatic_failure: 语言形式选择导致语用功能不当，例如请求、拒绝、道歉、感谢、称呼、缓和语或礼貌策略不合适。\n")
+		sb.WriteString("- social_pragmatic_failure: 对社会关系、身份距离、权力差异、文化规范或场景期待判断不当。\n")
+		sb.WriteString("- overall_evaluation: good 表示无明显问题；improvable 表示轻中度不合适但通常可修正；problematic 表示很可能冒犯或导致交际失败。\n\n")
 	} else {
-		// 非中文消息用英文 prompt
-		sb.WriteString("You are a linguistics expert specializing in pragmatics and cross-cultural communication.\n")
-		sb.WriteString("Your task is to analyze utterances between equal-status interlocutors (e.g., classmates or strangers) in online chat.\n\n")
+		sb.WriteString("You are the cross-cultural pragmatics evaluator inside PFChat.\n")
+		sb.WriteString("PFChat is a language-learning chat practice system where a user and an LLM bot talk within a selected relationship and topic. The app only records pragmatic issues that affect communicative success.\n")
+		sb.WriteString(fmt.Sprintf("Your task is to judge whether the %s has a pragmatic failure in this session context, then return JSON that can be shown directly in the pragmatic issue record page.\n\n", analysisTarget))
 
-		sb.WriteString("Important constraints:\n")
-		sb.WriteString("- Only detect genuine pragmatic failures, not grammatical errors or style issues\n")
-		sb.WriteString("- Only flag errors when an utterance may cause communication breakdown or offense\n")
-		sb.WriteString("- Direct expression in equal-status relationships is usually acceptable\n")
-		sb.WriteString("- The suggestion field should only contain the corrected sentence, no explanation or prefix\n")
-		sb.WriteString("- Do NOT include alternative options like \"or alternatively...\"\n")
-		sb.WriteString("- Do NOT include any explanation in the suggestion field\n")
-		sb.WriteString("- Just output the single best corrected sentence, nothing else\n\n")
+		sb.WriteString("Session context:\n")
+		sb.WriteString(fmt.Sprintf("- Session mode: %s\n", getSessionModePrompt(session.Mode, false)))
+		sb.WriteString(fmt.Sprintf("- Target/practice language: %s\n", targetLang))
+		sb.WriteString(fmt.Sprintf("- Relationship: %s\n", session.RelationshipType))
+		sb.WriteString(fmt.Sprintf("- Topic: %s\n", session.Topic))
+		sb.WriteString(fmt.Sprintf("- Sender country/region: %s\n", getCountryName(sender.Country)))
+		sb.WriteString(fmt.Sprintf("- Current analysis target: %s\n", analysisTarget))
+		sb.WriteString(fmt.Sprintf("- Receiver language background: %s\n\n", getCountryName(receiver.Country)))
+
+		sb.WriteString("Evaluation rules:\n")
+		sb.WriteString("- Detect pragmatic failures only, not ordinary grammar, spelling, vocabulary, or style issues unless they change politeness, intent, or relationship management.\n")
+		sb.WriteString("- Judge appropriateness by relationship: strangers, teacher-student, colleague/business contexts usually require more politeness; friends and classmates can be more direct.\n")
+		sb.WriteString("- Judge by topic: academic, business, travel, cultural exchange, and daily chat contexts have different expectations.\n")
+		sb.WriteString("- Do not flag a message merely because it is non-native or not idiomatic; flag only likely offense, misunderstanding, inappropriate requests/refusals/thanks/apologies, or relationship mismatch.\n")
+		sb.WriteString("- Evaluate only the current analysis target; do not attribute issues in previous messages to the current message.\n")
+		sb.WriteString("- In llm_l2 mode, the LLM bot may appropriately simulate L2 pragmatic problems; if the current analysis target is an LLM Bot reply, identify the intentionally triggered pragmatic failure.\n")
+		sb.WriteString("- In user_l2 mode, focus on whether the user's target-language message is pragmatically appropriate for a native-speaker interlocutor.\n\n")
+
+		sb.WriteString("Field meanings:\n")
+		sb.WriteString("- impoliteness: whether the current message is clearly rude, offensive, too commanding, or lacks necessary mitigation.\n")
+		sb.WriteString("- linguistic_pragmatic_failure: whether the wording/form choice makes the speech act pragmatically inappropriate, such as requests, refusals, apologies, thanks, address terms, mitigation, or politeness strategies.\n")
+		sb.WriteString("- social_pragmatic_failure: whether the message misjudges social relationship, distance, power, cultural norms, or situational expectations.\n")
+		sb.WriteString("- overall_evaluation: good means no clear issue; improvable means mild/moderate inappropriateness; problematic means likely offense or communication breakdown.\n\n")
 	}
 
-	// 聊天历史
 	if len(history) > 0 {
 		if isChineseMsg {
 			sb.WriteString("最近聊天记录（从旧到新）:\n")
@@ -157,28 +239,26 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		for i := len(history) - 1; i >= 0; i-- {
 			msg := history[i]
 			var senderName string
-			if msg.Sender.ID == sender.ID {
-				senderName = "Sender"
+			if msg.Role == "user" || msg.Sender.ID == sender.ID {
+				if isChineseMsg {
+					senderName = "用户"
+				} else {
+					senderName = "User"
+				}
 			} else {
-				senderName = "Receiver"
+				senderName = "LLM Bot"
 			}
 			sb.WriteString(fmt.Sprintf("[%s]: %s\n", senderName, msg.Content))
 		}
 		sb.WriteString("\n")
 	}
 
-	// 当前待分析消息
 	if isChineseMsg {
-		sb.WriteString(fmt.Sprintf("发送者来自: %s\n", getCountryName(sender.Country)))
-		sb.WriteString(fmt.Sprintf("接收者来自: %s\n", getCountryName(receiver.Country)))
-		sb.WriteString(fmt.Sprintf("待分析消息: \"%s\"\n\n", current.Content))
+		sb.WriteString(fmt.Sprintf("当前待分析的%s: %q\n\n", analysisTarget, current.Content))
 	} else {
-		sb.WriteString(fmt.Sprintf("Sender's country: %s\n", getCountryName(sender.Country)))
-		sb.WriteString(fmt.Sprintf("Receiver's country: %s\n", getCountryName(receiver.Country)))
-		sb.WriteString(fmt.Sprintf("Message to analyze: \"%s\"\n\n", current.Content))
+		sb.WriteString(fmt.Sprintf("Current %s to analyze: %q\n\n", analysisTarget, current.Content))
 	}
 
-	// JSON 格式要求
 	if isChineseMsg {
 		sb.WriteString("请以以下 JSON 格式分析（不要包含 markdown 代码块，只输出纯 JSON）:\n")
 	} else {
@@ -191,89 +271,204 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 	sb.WriteString("  \"linguistic_pragmatic_failure\": true/false,\n")
 	sb.WriteString("  \"social_pragmatic_failure\": true/false,\n")
 	sb.WriteString("  \"overall_evaluation\": \"good\"/\"improvable\"/\"problematic\",\n")
-	sb.WriteString("  \"suggestion\": \"corrected sentence in the SAME language as the original message\",\n")
-	sb.WriteString("  \"explanation\": \"detailed explanation\"\n")
+	sb.WriteString("  \"error_type\": \"语用语言失误/社会语用失误/严重语用语言失误/严重社会语用失误/语用语言失误和社会语用失误\",\n")
+	sb.WriteString("  \"suggestion\": \"single revised sentence in the SAME language as the original message\",\n")
+	sb.WriteString("  \"explanation\": \"brief reason and improvement advice\"\n")
 	sb.WriteString("}\n\n")
 
 	if isChineseMsg {
 		sb.WriteString("如果没有语用失误，返回:\n")
-		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
-		// 【Fix】suggestion 与原消息同语言（中文），explanation 用接收者母语
-		var suggestionLangNote string
-		switch msgLang {
-		case "zh":
-			suggestionLangNote = "suggestion 字段必须用中文（与原消息语言相同）。"
-		case "ja":
-			suggestionLangNote = "The suggestion field must be in Japanese / 日本語（same language as the original message）."
-		case "ko":
-			suggestionLangNote = "The suggestion field must be in Korean / 한국어（same language as the original message）."
-		default: // "en" 及其他
-			suggestionLangNote = "The suggestion field must be in English (same language as the original message)."
-		}
-
-		var explanationLangNote string
-		switch sender.Country {
-		case "CN", "TW", "HK", "SG":
-			explanationLangNote = "explanation 字段必须用中文（发送者的母语）。"
-		case "JP":
-			explanationLangNote = "The explanation field must be in Japanese / 日本語（sender's native language）."
-		case "KR":
-			explanationLangNote = "The explanation field must be in Korean / 한국어（sender's native language）."
-		default:
-			explanationLangNote = fmt.Sprintf("The explanation field must be in %s (sender's native language).", sender.Country)
-		}
-
-		if msgLang == "zh" {
-			sb.WriteString(fmt.Sprintf("重要提醒: %s %s\n", suggestionLangNote, explanationLangNote))
-		} else {
-			sb.WriteString(fmt.Sprintf("IMPORTANT: %s %s\n", suggestionLangNote, explanationLangNote))
-		}
+		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"error_type\": \"\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
+		sb.WriteString(fmt.Sprintf("输出语言要求: suggestion 必须使用%s，并且只包含一个最佳修改句；explanation 必须使用%s，说明为什么它是语用问题以及如何改进。\n", suggestionLang, explanationLang))
+		sb.WriteString("如果 has_error 为 false，suggestion 和 explanation 必须为空字符串。\n")
 	} else {
 		sb.WriteString("If no pragmatic failure is detected, return:\n")
-		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
-		// 【Fix】suggestion 与原消息同语言
-		var suggestionLangNote string
-		switch msgLang {
-		case "zh":
-			suggestionLangNote = "suggestion 字段必须用中文（与原消息语言相同）。"
-		case "ja":
-			suggestionLangNote = "The suggestion field must be in Japanese / 日本語（same language as the original message）."
-		case "ko":
-			suggestionLangNote = "The suggestion field must be in Korean / 한국어（same language as the original message）."
-		default: // "en" 及其他
-			suggestionLangNote = "The suggestion field must be in English (same language as the original message)."
-		}
-
-		var explanationLangNote string
-		switch sender.Country {
-		case "CN", "TW", "HK", "SG":
-			explanationLangNote = "explanation 字段必须用中文（发送者的母语）。"
-		case "JP":
-			explanationLangNote = "The explanation field must be in Japanese / 日本語（sender's native language）."
-		case "KR":
-			explanationLangNote = "The explanation field must be in Korean / 한국어（sender's native language）."
-		default:
-			explanationLangNote = fmt.Sprintf("The explanation field must be in %s (sender's native language).", sender.Country)
-		}
-
-		if msgLang == "zh" {
-			sb.WriteString(fmt.Sprintf("重要提醒: %s %s\n", suggestionLangNote, explanationLangNote))
-		} else {
-			sb.WriteString(fmt.Sprintf("IMPORTANT: %s %s\n", suggestionLangNote, explanationLangNote))
-		}
+		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"error_type\": \"\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
+		sb.WriteString(fmt.Sprintf("Output language requirements: suggestion must be in %s and contain only one best revised sentence; explanation must be in %s and explain why it is a pragmatic issue and how to improve it.\n", suggestionLang, explanationLang))
+		sb.WriteString("If has_error is false, suggestion and explanation must be empty strings.\n")
 	}
 
 	return sb.String()
 }
 
-// makeDashScopeRequest 发起 DashScope API 请求 (可复用)
+func getAnalysisTargetName(role string, isChinese bool) string {
+	if role == ErrorSourceLLM {
+		if isChinese {
+			return "LLM Bot 当前回复"
+		}
+		return "LLM Bot reply"
+	}
+	if isChinese {
+		return "用户当前消息"
+	}
+	return "user message"
+}
+func getSessionModePrompt(mode string, isChinese bool) string {
+	switch mode {
+	case ModeUserL2:
+		if isChinese {
+			return "user_l2，用户使用目标语言练习，LLM Bot 作为目标语言母语者自然回应"
+		}
+		return "user_l2, the user practices in the target language and the LLM bot replies as a native speaker"
+	case ModeLLML2:
+		if isChinese {
+			return "llm_l2，LLM Bot 使用目标语言模拟二语学习者，用户通常作为母语者参与对话"
+		}
+		return "llm_l2, the LLM bot simulates an L2 learner in the target language and the user usually participates as a native speaker"
+	default:
+		if isChinese {
+			return "未知模式，按普通跨文化聊天练习处理"
+		}
+		return "unknown mode, treat as a regular cross-cultural chat practice session"
+	}
+}
+
+func getSuggestionLanguageName(msgLang string, targetLang string, isChinese bool) string {
+	switch msgLang {
+	case "zh":
+		if isChinese {
+			return "中文"
+		}
+		return "Chinese"
+	case "ja":
+		if isChinese {
+			return "日语"
+		}
+		return "Japanese"
+	case "ko":
+		if isChinese {
+			return "韩语"
+		}
+		return "Korean"
+	default:
+		return getTargetLanguagePromptName(targetLang, isChinese)
+	}
+}
+
+func getTargetLanguagePromptName(lang string, isChinese bool) string {
+	switch strings.ToUpper(lang) {
+	case "ZH":
+		if isChinese {
+			return "中文"
+		}
+		return "Chinese"
+	case "JP":
+		if isChinese {
+			return "日语"
+		}
+		return "Japanese"
+	case "KR":
+		if isChinese {
+			return "韩语"
+		}
+		return "Korean"
+	case "FR":
+		if isChinese {
+			return "法语"
+		}
+		return "French"
+	case "DE":
+		if isChinese {
+			return "德语"
+		}
+		return "German"
+	default:
+		if isChinese {
+			return "英语"
+		}
+		return "English"
+	}
+}
+
+func getCountryLanguageName(country string, isChinese bool) string {
+	switch country {
+	case "CN", "TW", "HK", "SG":
+		if isChinese {
+			return "中文"
+		}
+		return "Chinese"
+	case "JP":
+		if isChinese {
+			return "日语"
+		}
+		return "Japanese"
+	case "KR":
+		if isChinese {
+			return "韩语"
+		}
+		return "Korean"
+	case "FR":
+		if isChinese {
+			return "法语"
+		}
+		return "French"
+	case "DE":
+		if isChinese {
+			return "德语"
+		}
+		return "German"
+	default:
+		if isChinese {
+			return "英语"
+		}
+		return "English"
+	}
+}
+
+func getDashScopeAPIKey() string {
+	if apiKey := strings.TrimSpace(os.Getenv("DASHSCOPE_API_KEY")); apiKey != "" {
+		return apiKey
+	}
+	return fallbackDashScopeAPIKey
+}
+
+func getDashScopeModel() string {
+	if model := strings.TrimSpace(os.Getenv("DASHSCOPE_MODEL")); model != "" {
+		return model
+	}
+	return defaultModel
+}
+
+func getDashScopeGenerationURL() string {
+	if apiURL := strings.TrimSpace(os.Getenv("DASHSCOPE_API_URL")); apiURL != "" {
+		return strings.TrimRight(apiURL, "/")
+	}
+
+	baseURL := strings.TrimSpace(os.Getenv("DASHSCOPE_BASE_URL"))
+	if baseURL == "" {
+		return dashScopeDefaultAPIURL
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	if strings.HasSuffix(baseURL, "/generation") {
+		return baseURL
+	}
+	if strings.HasSuffix(baseURL, "/api/v1") {
+		return baseURL + dashScopeGenerationPath
+	}
+	return baseURL + "/api/v1" + dashScopeGenerationPath
+}
+
+func boolPtr(v bool) *bool {
+	return &v
+}
+
+func newDashScopeTextMessage(role string, content string) DashScopeMessage {
+	return DashScopeMessage{
+		Role: role,
+		Content: []DashScopeContentPart{
+			{Text: content},
+		},
+	}
+}
+
+// makeDashScopeRequest 发起 DashScope 原生 HTTP 请求 (可复用)
 func makeDashScopeRequest(apiKey string, reqBody DashScopeRequest) (*DashScopeResponse, error) {
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("JSON 序列化失败: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", dashScopeAPIURL, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("POST", getDashScopeGenerationURL(), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %v", err)
 	}
@@ -301,43 +496,84 @@ func makeDashScopeRequest(apiKey string, reqBody DashScopeRequest) (*DashScopeRe
 	if err := json.Unmarshal(body, &dashResp); err != nil {
 		return nil, fmt.Errorf("解析响应失败: %v", err)
 	}
+	if dashResp.StatusCode != 0 && dashResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API 返回错误 %d: %s %s", dashResp.StatusCode, dashResp.Code, dashResp.Message)
+	}
 
 	return &dashResp, nil
 }
 
+func getDashScopeResponseText(resp *DashScopeResponse) string {
+	if resp == nil {
+		return ""
+	}
+	if len(resp.Output.Choices) > 0 {
+		text := extractDashScopeContentText(resp.Output.Choices[0].Message.Content)
+		if strings.TrimSpace(text) != "" {
+			return text
+		}
+	}
+	return resp.Output.Text
+}
+
+func extractDashScopeContentText(raw json.RawMessage) string {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return ""
+	}
+
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return text
+	}
+
+	var parts []map[string]any
+	if err := json.Unmarshal(raw, &parts); err == nil {
+		var sb strings.Builder
+		for _, part := range parts {
+			if value, ok := part["text"].(string); ok {
+				sb.WriteString(value)
+			}
+		}
+		return sb.String()
+	}
+
+	var part map[string]any
+	if err := json.Unmarshal(raw, &part); err == nil {
+		if value, ok := part["text"].(string); ok {
+			return value
+		}
+	}
+
+	return string(raw)
+}
+
 // callDashScopeAPI 调用 DashScope API 进行语用检查
 func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
-	apiKey := "sk-8ab77da79b894ba6beb61c9190c74602"
-
 	reqBody := DashScopeRequest{
-		Model: defaultModel,
+		Model: getDashScopeModel(),
 		Input: DashScopeInput{
 			Messages: []DashScopeMessage{
-				{
-					Role:    "user",
-					Content: prompt,
-				},
+				newDashScopeTextMessage("user", prompt),
 			},
 		},
 		Parameters: DashScopeParameters{
-			ResultFormat: "message",
-			Temperature:  0.3,
-			MaxTokens:    512,
+			ResultFormat:        "message",
+			Temperature:         0.3,
+			MaxCompletionTokens: 512,
+			ResponseFormat:      &DashScopeResponseFormat{Type: "json_object"},
+			EnableThinking:      boolPtr(false),
 		},
 	}
 
-	dashResp, err := makeDashScopeRequest(apiKey, reqBody)
+	dashResp, err := makeDashScopeRequest(getDashScopeAPIKey(), reqBody)
 	if err != nil {
 		return nil, err
 	}
 
 	// 提取响应文本
-	var responseText string
-	if len(dashResp.Output.Choices) > 0 {
-		responseText = dashResp.Output.Choices[0].Message.Content
-	} else if dashResp.Output.Text != "" {
-		responseText = dashResp.Output.Text
-	} else {
+	responseText := getDashScopeResponseText(dashResp)
+	if strings.TrimSpace(responseText) == "" {
 		return &GrammarCheckResponse{HasError: false}, nil
 	}
 
@@ -378,7 +614,6 @@ func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
 
 	return &result, nil
 }
-
 func extractJSON(text string) string {
 	text = strings.ReplaceAll(text, "```json", "")
 	text = strings.ReplaceAll(text, "```", "")
@@ -414,18 +649,14 @@ func getCountryName(countryCode string) string {
 }
 
 // ============================================================================
-// 【修改说明】修改 buildCombinedPrompt 函数中的语言判断逻辑
-//
-// 原逻辑：基于 sender.Country == "CN" 判断语言
-// 新逻辑：检测消息内容的实际语言（中文/日文/韩文/英文等）
-//   - suggestion 字段：与消息内容同语言（外国人说中文 → suggestion 用中文）
-//   - explanation 字段：用接收者的母语（或发送者的母语），方便双方理解
+// 【说明】buildCombinedPrompt 基于消息实际语言和会话上下文构造提示词。
+//   - suggestion 字段：与消息内容同语言。
+//   - explanation 字段：使用发送者的主要语言，方便学习者理解。
+//   - 判定标准：贴合 PFChat 的会话模式、目标语言、关系、主题和五类语用失误。
 // ============================================================================
 
-// detectMessageLanguage 检测消息的主要语言
-// 返回 "zh"（中文）、"ja"（日文）、"ko"（韩文）或 "en"（英文及其他）
-// detectMessageLanguage 检测消息的主要语言
-// 返回 "zh"（中文）、"ja"（日文）、"ko"（韩文）或 "en"（英文及其他）
+// detectMessageLanguage 检测消息的主要语言。
+// 返回 "zh"（中文）、"ja"（日文）、"ko"（韩文）或 "en"（英文及其他）。
 func detectMessageLanguage(content string) string {
 	chineseCount := 0
 	japaneseCount := 0
@@ -467,4 +698,3 @@ func detectMessageLanguage(content string) string {
 	}
 	return "en"
 }
-
