@@ -23,6 +23,7 @@ type SendLLMMessageResponse struct {
 	LLMPragmaticCheck *PragmaticCheckResult `json:"llm_pragmatic_check,omitempty"`
 	SessionEnded      bool                  `json:"session_ended"`
 	SessionSummary    string                `json:"session_summary"`
+	SessionErrorCount int                   `json:"session_error_count"`
 }
 
 // PragmaticCheckResult
@@ -87,10 +88,7 @@ func sendLLMMessage(c *gin.Context) {
 		Preload("Sender").Preload("Receiver").
 		Find(&historyMessages)
 
-	// 1. 对用户消息做语用检测
-	pragmaticResult := checkUserMessagePragmatics(userID, userMsg, session, user, botUser, historyMessages)
-
-	// 2. 生成LLM回复
+	// 1. 生成LLM回复。语用反馈在会话结束时统一生成和保存。
 	llmReplyContent := generateLLMChatReply(session, historyMessages, req.Content, user, botUser)
 
 	// 保存LLM回复
@@ -106,19 +104,14 @@ func sendLLMMessage(c *gin.Context) {
 	}
 	db.Preload("Sender").Preload("Receiver").First(&llmMsg, llmMsg.ID)
 
-	var llmPragmaticResult *PragmaticCheckResult
-	if session.Mode == ModeLLML2 {
-		llmHistory := append([]Message{userMsg}, historyMessages...)
-		llmPragmaticResult = checkLLMMessagePragmatics(userID, llmMsg, session, botUser, user, llmHistory)
-	}
-
-	// 3. 更新轮次计数
+	// 2. 更新轮次计数
 	session.RoundCount++
 	db.Model(&session).Update("round_count", session.RoundCount)
 
-	// 4. 判断是否需要自动结束（五轮模式）
+	// 3. 判断是否需要自动结束（五轮模式）
 	sessionEnded := false
 	sessionSummary := ""
+	sessionErrorCount := 0
 
 	if session.FeedbackMode == FeedbackRounds5 && session.RoundCount >= 5 {
 		// 获取会话所有消息生成汇总
@@ -126,7 +119,7 @@ func sendLLMMessage(c *gin.Context) {
 		db.Where("session_id = ?", session.ID).Order("created_at ASC").
 			Preload("Sender").Preload("Receiver").Find(&allMessages)
 
-		sessionSummary = generateSessionSummary(session, allMessages, user)
+		sessionSummary, sessionErrorCount = generateAndStoreSessionFeedback(session, allMessages, user)
 
 		// 自动结束会话
 		db.Model(&session).Updates(map[string]interface{}{
@@ -139,10 +132,10 @@ func sendLLMMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, SendLLMMessageResponse{
 		UserMessage:       userMsg,
 		LLMResponse:       llmMsg,
-		PragmaticCheck:    pragmaticResult,
-		LLMPragmaticCheck: llmPragmaticResult,
+		PragmaticCheck:    &PragmaticCheckResult{HasError: false},
 		SessionEnded:      sessionEnded,
 		SessionSummary:    sessionSummary,
+		SessionErrorCount: sessionErrorCount,
 	})
 }
 
@@ -250,8 +243,11 @@ func buildUserL2Prompt(session ConversationSession, history []Message, userInput
 	topic := session.Topic
 	userNativeLang := getLanguageNameByCountry(user.Country)
 	targetLangFull := getLanguageFullName(targetLang)
+	llmCountry := getLLMPersonaNativeCountry(session)
+	llmCulture := getCountryName(llmCountry)
 
 	sb.WriteString(fmt.Sprintf("You are a native %s speaker having a natural conversation with a language learner.\n", targetLangFull))
+	sb.WriteString(fmt.Sprintf("Your cultural background is %s. Keep your replies consistent with that cultural background and the relationship context.\n", llmCulture))
 	sb.WriteString(fmt.Sprintf("Your relationship with the user is: %s\n", relationship))
 	sb.WriteString(fmt.Sprintf("Conversation topic: %s\n", topic))
 	sb.WriteString(fmt.Sprintf("The user's native language is: %s\n\n", userNativeLang))
@@ -291,10 +287,11 @@ func buildLLML2Prompt(session ConversationSession, history []Message, userInput 
 	topic := session.Topic
 	userNativeLang := getLanguageNameByCountry(user.Country)
 	targetLangFull := getLanguageFullName(targetLang)
-	// LLM用目标语言回复，但故意不流利
-	// 这里targetLang是LLM要"学习"的语言（也是用户的母语）
+	learnerCountry := getLLMPersonaNativeCountry(session)
+	learnerCulture := getCountryName(learnerCountry)
+	learnerNativeLang := getLanguageNameByCountry(learnerCountry)
 
-	sb.WriteString(fmt.Sprintf("You are a language learner whose native language is NOT %s. ", targetLangFull))
+	sb.WriteString(fmt.Sprintf("You are a language learner from %s. Your native/main language is %s, not %s. ", learnerCulture, learnerNativeLang, targetLangFull))
 	sb.WriteString(fmt.Sprintf("You are learning %s as a second language and your level is intermediate.\n", targetLangFull))
 	sb.WriteString(fmt.Sprintf("Your relationship with the user is: %s\n", relationship))
 	sb.WriteString(fmt.Sprintf("Conversation topic: %s\n", topic))
@@ -302,10 +299,11 @@ func buildLLML2Prompt(session ConversationSession, history []Message, userInput 
 
 	sb.WriteString("Instructions - simulate an intermediate L2 speaker for pragmatic-awareness training:\n")
 	sb.WriteString("- Keep the conversation natural and relevant to the user's message.\n")
-	sb.WriteString("- When the context naturally involves a request, refusal, apology, thanks, disagreement, suggestion, invitation, or sensitive cultural/social expectation, include ONE subtle pragmatic failure that a learner might realistically make.\n")
-	sb.WriteString("- Useful failure patterns: overly direct request, missing mitigation, wrong politeness level for the relationship, culturally unusual apology/thanks, awkward refusal, or literal transfer from another language.\n")
-	sb.WriteString("- Do not force an error into every reply. If the user's message is simple or low-stakes, reply mostly naturally with only mild non-native phrasing.\n")
-	sb.WriteString("- Aim for pragmatic failures in about 60-70% of replies, and make them subtle enough for the user to observe and reflect on.\n")
+	sb.WriteString("- Do not make every problem a social/cultural politeness problem. Use a balanced mix of pragmalinguistic and sociopragmatic issues across the session.\n")
+	sb.WriteString("- Pragmalinguistic patterns to use naturally: odd word order, poor word choice, reversed sentence parts, typo-like spelling or wrong character choice, missing small function words, awkward collocations, literal transfer from your native language, or expressions that make the speech act sound too blunt or unclear.\n")
+	sb.WriteString("- Sociopragmatic patterns to use occasionally: wrong politeness level, too much/too little mitigation, culturally unusual apology/thanks, awkward refusal, or mismatched distance/power expectations.\n")
+	sb.WriteString("- Do not force an error into every reply. If the user's message is simple or low-stakes, reply mostly naturally with only mild non-native phrasing or no obvious issue.\n")
+	sb.WriteString("- Aim for noticeable but realistic L2 features in about half of replies; make serious social-pragmatic problems less frequent than small wording/order/choice problems.\n")
 	sb.WriteString("- Do not explain or label your own mistakes in the chat reply.\n")
 	sb.WriteString("- Keep responses conversational length (2-4 sentences).\n")
 	sb.WriteString(fmt.Sprintf("- Respond ONLY in %s.\n\n", targetLangFull))
@@ -329,83 +327,188 @@ func buildLLML2Prompt(session ConversationSession, history []Message, userInput 
 	return sb.String()
 }
 
-// generateSessionSummary 生成会话结束汇总反馈
-func generateSessionSummary(session ConversationSession, messages []Message, user User) string {
-	// 获取本次会话所有语用错误。session_id 是新字段，message_id 子查询兼容旧数据。
-	var errors []GrammarError
-	db.Where("user_id = ? AND (session_id = ? OR message_id IN (?))",
-		user.ID,
-		session.ID,
-		db.Model(&Message{}).Select("id").Where("session_id = ?", session.ID),
-	).Find(&errors)
+type SessionPragmaticAnalysis struct {
+	Summary string                  `json:"summary"`
+	Issues  []SessionPragmaticIssue `json:"issues"`
+}
 
-	isZh := user.Country == "CN" || user.Country == "TW" || user.Country == "HK" || user.Country == "SG"
-	targetLang := getLanguageFullName(session.TargetLanguage)
+type SessionPragmaticIssue struct {
+	SourceRole        string `json:"source_role"`
+	OriginalText      string `json:"original_text"`
+	ErrorType         string `json:"error_type"`
+	LLMSuggestion     string `json:"llm_suggestion"`
+	LLMExplanation    string `json:"llm_explanation"`
+	OverallEvaluation string `json:"overall_evaluation"`
+}
 
-	var sb strings.Builder
-
-	if isZh {
-		sb.WriteString("你是一位跨文化语用学专家。请根据以下完整对话会话的语用分析，用中文给学习者提供详尽的会话总结报告。\n\n")
-		sb.WriteString(fmt.Sprintf("练习语言: %s | 对话关系: %s | 对话主题: %s\n", targetLang, session.RelationshipType, session.Topic))
-		sb.WriteString(fmt.Sprintf("总轮次: %d 轮\n\n", session.RoundCount))
-	} else {
-		sb.WriteString("You are an expert in cross-cultural pragmatics. Based on the complete conversation session analysis, provide a comprehensive session summary report in English.\n\n")
-		sb.WriteString(fmt.Sprintf("Practice language: %s | Relationship: %s | Topic: %s\n", targetLang, session.RelationshipType, session.Topic))
-		sb.WriteString(fmt.Sprintf("Total rounds: %d\n\n", session.RoundCount))
-	}
-
-	if len(errors) == 0 {
-		if isZh {
-			return fmt.Sprintf("恭喜！在本次%d轮的%s对话练习中，您没有产生明显的语用失误。您的语用能力表现出色，对话自然流畅，语气和表达方式都很恰当。继续保持，期待您下次的练习！", session.RoundCount, targetLang)
-		}
-		return fmt.Sprintf("Congratulations! In this %d-round %s conversation practice, no significant pragmatic errors were detected. Your pragmatic competence is excellent. Keep up the great work!", session.RoundCount, targetLang)
-	}
-
-	// 按错误类型和来源统计
-	typeCount := make(map[string]int)
-	sourceCount := make(map[string]int)
-	for _, e := range errors {
-		typeCount[e.ErrorType]++
-		sourceCount[e.SourceRole]++
-	}
-
-	sb.WriteString(fmt.Sprintf("共检测到 %d 处语用问题:\n", len(errors)))
-	if session.Mode == ModeLLML2 {
-		sb.WriteString(fmt.Sprintf("- 用户消息: %d 处\n", sourceCount[ErrorSourceUser]))
-		sb.WriteString(fmt.Sprintf("- LLM模拟学习者回复: %d 处\n", sourceCount[ErrorSourceLLM]))
-	}
-	for t, count := range typeCount {
-		sb.WriteString(fmt.Sprintf("- %s: %d 处\n", t, count))
-	}
-
-	sb.WriteString("\n典型语用问题:\n")
-	limit := 5
-	if len(errors) < limit {
-		limit = len(errors)
-	}
-	for _, e := range errors[:limit] {
-		sourceLabel := getErrorSourceLabel(e.SourceRole, isZh)
-		sb.WriteString(fmt.Sprintf("  来源: %s\n  原文: \"%s\"\n  问题: %s\n  建议: %s\n\n", sourceLabel, e.OriginalText, e.ErrorType, e.LLMSuggestion))
-	}
-
-	if isZh {
-		sb.WriteString("\n请提供:\n1. 本次会话语用总体评价（2-3句）\n2. 主要语用问题类型分析\n3. 您的语用优势\n4. 如果包含 LLM模拟学习者回复，请指出这些问题是AI为训练故意触发的观察样例\n5. 针对性改进建议（3-5条）\n6. 鼓励性结语\n用友好专业的语气，分段落展示，总字数控制在300字以内。")
-	} else {
-		sb.WriteString("\nPlease provide:\n1. Overall pragmatic evaluation (2-3 sentences)\n2. Main pragmatic error types analysis\n3. Your pragmatic strengths\n4. If LLM learner replies are included, clarify that those issues are intentional observation samples for training\n5. Targeted improvement suggestions (3-5 tips)\n6. Encouraging closing\nUse a friendly professional tone, organize in paragraphs, under 300 words.")
-	}
-
-	prompt := sb.String()
-	summary, err := callLLMChatAPI(prompt)
+// generateAndStoreSessionFeedback 生成会话级反馈，并只保存本次反馈中的代表性问题。
+func generateAndStoreSessionFeedback(session ConversationSession, messages []Message, user User) (string, int) {
+	analysis, err := analyzeSessionPragmatics(session, messages, user)
 	if err != nil {
-		log.Printf("生成会话汇总失败: %v", err)
-		if isZh {
-			return fmt.Sprintf("本次对话共 %d 轮，检测到 %d 处语用问题。主要问题类型：%s。建议关注语言语用规范和社会文化语用差异，继续努力！",
-				session.RoundCount, len(errors), getMainErrorTypes(typeCount))
-		}
-		return fmt.Sprintf("This session had %d rounds with %d pragmatic issues detected. Main error types: %s. Keep practicing!",
-			session.RoundCount, len(errors), getMainErrorTypes(typeCount))
+		log.Printf("生成会话级语用反馈失败: %v", err)
+		summary := buildFallbackSessionSummary(session, user)
+		replaceSessionFeedbackRecords(session, user.ID, nil)
+		return summary, 0
 	}
+
+	if strings.TrimSpace(analysis.Summary) == "" {
+		analysis.Summary = buildFallbackSessionSummary(session, user)
+	}
+	count := replaceSessionFeedbackRecords(session, user.ID, analysis.Issues)
+	return analysis.Summary, count
+}
+
+// generateSessionSummary 保留旧调用入口，内部改为会话级反馈。
+func generateSessionSummary(session ConversationSession, messages []Message, user User) string {
+	summary, _ := generateAndStoreSessionFeedback(session, messages, user)
 	return summary
+}
+
+func analyzeSessionPragmatics(session ConversationSession, messages []Message, user User) (*SessionPragmaticAnalysis, error) {
+	prompt := buildSessionFeedbackPrompt(session, messages, user)
+	var analysis SessionPragmaticAnalysis
+	if err := callDashScopeJSON(prompt, &analysis, 1800); err != nil {
+		return nil, err
+	}
+	return &analysis, nil
+}
+
+func replaceSessionFeedbackRecords(session ConversationSession, userID uint, issues []SessionPragmaticIssue) int {
+	db.Where("user_id = ? AND session_id = ?", userID, session.ID).Delete(&GrammarError{})
+
+	saved := 0
+	for _, issue := range issues {
+		errorType := normalizeErrorType(issue.ErrorType)
+		sourceRole := normalizeSourceRole(issue.SourceRole)
+		overallEvaluation := strings.TrimSpace(issue.OverallEvaluation)
+		if overallEvaluation == "" {
+			if IsProblematicErrorType(errorType) {
+				overallEvaluation = "problematic"
+			} else {
+				overallEvaluation = "improvable"
+			}
+		}
+
+		originalText := strings.TrimSpace(issue.OriginalText)
+		if originalText == "" {
+			originalText = "Session-level pragmatic feedback"
+		}
+
+		record := GrammarError{
+			UserID:            userID,
+			SessionID:         session.ID,
+			MessageID:         0,
+			SourceRole:        sourceRole,
+			OriginalText:      originalText,
+			LLMSuggestion:     strings.TrimSpace(issue.LLMSuggestion),
+			LLMExplanation:    strings.TrimSpace(issue.LLMExplanation),
+			ErrorType:         errorType,
+			OverallEvaluation: overallEvaluation,
+		}
+		if err := db.Create(&record).Error; err != nil {
+			log.Printf("保存会话级语用反馈失败: %v", err)
+			continue
+		}
+		saved++
+	}
+	return saved
+}
+
+func normalizeErrorType(errorType string) string {
+	errorType = strings.TrimSpace(errorType)
+	if IsValidErrorType(errorType) {
+		return errorType
+	}
+	return ErrorTypePragmalinguistic
+}
+
+func normalizeSourceRole(sourceRole string) string {
+	switch strings.TrimSpace(sourceRole) {
+	case ErrorSourceLLM:
+		return ErrorSourceLLM
+	default:
+		return ErrorSourceUser
+	}
+}
+
+func buildFallbackSessionSummary(session ConversationSession, user User) string {
+	targetLang := getLanguageFullName(session.TargetLanguage)
+	if isChineseUser(user) {
+		return fmt.Sprintf("本次%d轮%s对话已完成。系统未能生成详细结构化反馈，但建议继续关注对话关系、礼貌程度、请求/拒绝/感谢等表达方式与文化预期是否匹配。", session.RoundCount, targetLang)
+	}
+	return fmt.Sprintf("This %d-round %s conversation is complete. A detailed structured report could not be generated, but keep watching whether politeness, requests, refusals, thanks, and relationship management match the cultural context.", session.RoundCount, targetLang)
+}
+
+func buildSessionFeedbackPrompt(session ConversationSession, messages []Message, user User) string {
+	var sb strings.Builder
+	isZh := isChineseUser(user)
+	targetLang := getLanguageFullName(session.TargetLanguage)
+	humanCulture := getCountryName(user.Country)
+	llmCulture := getCountryName(getLLMPersonaNativeCountry(session))
+	llmNativeLang := getLanguageNameByCountry(getLLMPersonaNativeCountry(session))
+
+	if isZh {
+		sb.WriteString("你是 PFChat 的跨文化语用学会话反馈评估器。请在完整会话结束后进行一次性分析，而不是逐句批改。\n")
+		sb.WriteString("你的输出将被保存为本次会话的反馈记录；请只选择最有代表性的 0-6 个问题，不要为每句话都创建记录。\n\n")
+		sb.WriteString(fmt.Sprintf("会话模式: %s\n", getSessionModePrompt(session.Mode, true)))
+		sb.WriteString(fmt.Sprintf("练习语言: %s\n", targetLang))
+		sb.WriteString(fmt.Sprintf("对话关系: %s\n", session.RelationshipType))
+		sb.WriteString(fmt.Sprintf("对话主题: %s\n", session.Topic))
+		sb.WriteString(fmt.Sprintf("Human Listener/Speaker 文化背景: %s\n", humanCulture))
+		sb.WriteString(fmt.Sprintf("LLM Speaker 文化背景: %s，母语/主要语言: %s\n\n", llmCulture, llmNativeLang))
+	} else {
+		sb.WriteString("You are PFChat's cross-cultural pragmatics session-feedback evaluator. Analyze the completed conversation once, not sentence by sentence.\n")
+		sb.WriteString("Your output will be stored as this session's feedback record. Select only the 0-6 most representative issues; do not create a record for every utterance.\n\n")
+		sb.WriteString(fmt.Sprintf("Session mode: %s\n", getSessionModePrompt(session.Mode, false)))
+		sb.WriteString(fmt.Sprintf("Practice language: %s\n", targetLang))
+		sb.WriteString(fmt.Sprintf("Relationship: %s\n", session.RelationshipType))
+		sb.WriteString(fmt.Sprintf("Topic: %s\n", session.Topic))
+		sb.WriteString(fmt.Sprintf("Human Listener/Speaker cultural background: %s\n", humanCulture))
+		sb.WriteString(fmt.Sprintf("LLM Speaker cultural background: %s; native/main language: %s\n\n", llmCulture, llmNativeLang))
+	}
+
+	if session.Mode == ModeLLML2 {
+		if isZh {
+			sb.WriteString("LLM Speaker 是第二语言学习者。它的失误是训练样例：解释必须写给 Human Listener，说明听者可能如何理解、可以观察什么，不要对 LLM Speaker 说教。\n")
+			sb.WriteString("请平衡识别语用语言失误和社会语用失误。除礼貌/关系误判外，也要关注自然的二语问题：语序错误、用词不当、句子成分颠倒、错别字/拼写近似、搭配生硬；只有这些影响意图、礼貌或理解时才列为语用语言失误。\n\n")
+		} else {
+			sb.WriteString("The LLM Speaker is an L2 learner. Its mistakes are training samples: explanations must be written for the Human Listener, describing how the listener may interpret them and what to observe. Do not lecture the LLM Speaker.\n")
+			sb.WriteString("Balance pragmalinguistic and sociopragmatic issues. In addition to politeness or relationship mismatches, notice natural L2 problems such as word order errors, poor word choice, reversed sentence parts, typo-like spelling, and awkward collocations; list them as pragmalinguistic only when they affect intent, politeness, or understanding.\n\n")
+		}
+	}
+
+	if isZh {
+		sb.WriteString("完整对话记录:\n")
+	} else {
+		sb.WriteString("Complete conversation:\n")
+	}
+	for i, msg := range messages {
+		role := "Human"
+		if msg.Role == "llm" {
+			role = "LLM Speaker"
+		}
+		sb.WriteString(fmt.Sprintf("%d. %s: %s\n", i+1, role, msg.Content))
+	}
+
+	if isZh {
+		sb.WriteString("\n请只输出纯 JSON，不要 markdown。格式如下:\n")
+	} else {
+		sb.WriteString("\nReturn pure JSON only, no markdown. Use this shape:\n")
+	}
+	sb.WriteString("{\n")
+	sb.WriteString("  \"summary\": \"session-level feedback report in the human user's language, 180-300 words\",\n")
+	sb.WriteString("  \"issues\": [\n")
+	sb.WriteString("    {\n")
+	sb.WriteString("      \"source_role\": \"user/llm\",\n")
+	sb.WriteString("      \"original_text\": \"short representative excerpt or session-level pattern, not necessarily a full message\",\n")
+	sb.WriteString("      \"error_type\": \"语用语言失误/社会语用失误/严重语用语言失误/严重社会语用失误/语用语言失误和社会语用失误\",\n")
+	sb.WriteString("      \"llm_suggestion\": \"one best revised wording or concise listening strategy\",\n")
+	sb.WriteString("      \"llm_explanation\": \"brief explanation for the human user/listener\",\n")
+	sb.WriteString("      \"overall_evaluation\": \"improvable/problematic\"\n")
+	sb.WriteString("    }\n")
+	sb.WriteString("  ]\n")
+	sb.WriteString("}\n")
+	return sb.String()
 }
 
 func getErrorSourceLabel(sourceRole string, isChinese bool) string {
@@ -420,6 +523,38 @@ func getErrorSourceLabel(sourceRole string, isChinese bool) string {
 	}
 	return "User"
 }
+
+func isChineseUser(user User) bool {
+	switch user.Country {
+	case "CN", "TW", "HK", "SG":
+		return true
+	default:
+		return false
+	}
+}
+
+func getLLMPersonaNativeCountry(session ConversationSession) string {
+	if session.Mode == ModeUserL2 {
+		return targetLanguageToCountry(session.TargetLanguage)
+	}
+	return getLearnerNativeCountryForTarget(session.TargetLanguage)
+}
+
+func getLearnerNativeCountryForTarget(targetLang string) string {
+	switch strings.ToUpper(targetLang) {
+	case "EN", "FR", "DE":
+		return "CN"
+	case "ZH":
+		return "US"
+	case "JP":
+		return "US"
+	case "KR":
+		return "JP"
+	default:
+		return "CN"
+	}
+}
+
 func getMainErrorTypes(typeCount map[string]int) string {
 	types := make([]string, 0)
 	for t := range typeCount {

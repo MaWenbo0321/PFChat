@@ -33,6 +33,10 @@
           <span class="info-value">{{ getLanguageName(sessionStore.currentSession.target_language) }}</span>
         </div>
         <div class="session-info-item">
+          <span class="info-label">{{ $t('chat.aiCulture') }}:</span>
+          <span class="info-value">{{ llmPersonaInfo.culture }}</span>
+        </div>
+        <div class="session-info-item">
           <span class="info-label">{{ $t('chat.rounds') }}:</span>
           <span class="info-value round-count">{{ sessionStore.currentSession.round_count || 0 }}</span>
           <span v-if="sessionStore.currentSession.feedback_mode === 'rounds_5'" class="rounds-limit"> / 5</span>
@@ -78,7 +82,7 @@
                 <el-tag size="small" effect="plain" :type="sessionStore.currentSession?.mode === 'user_l2' ? 'primary' : 'success'">
                   {{ sessionStore.currentSession?.mode === 'user_l2' ? $t('setup.modeUserL2Short') : $t('setup.modeLLML2Short') }}
                 </el-tag>
-                <span class="target-lang">{{ getLanguageName(sessionStore.currentSession?.target_language) }}</span>
+                <span class="target-lang">{{ getLanguageName(sessionStore.currentSession?.target_language) }} · {{ llmPersonaInfo.culture }}</span>
               </div>
             </div>
           </div>
@@ -101,6 +105,7 @@
               <h3>{{ $t('chat.welcomeTitle') }}</h3>
               <p>{{ getWelcomeMessage() }}</p>
               <div class="welcome-tips">
+                <p>{{ $t('chat.aiCultureHint', { culture: llmPersonaInfo.culture, native: llmPersonaInfo.nativeLanguage }) }}</p>
                 <p v-if="sessionStore.currentSession?.mode === 'user_l2'">{{ $t('chat.tipUserL2') }}</p>
                 <p v-else>{{ $t('chat.tipLLML2') }}</p>
               </div>
@@ -240,7 +245,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -318,6 +323,7 @@ const autoEndSession = async (reason) => {
   try {
     const data = await api.endSession(sessionStore.currentSession.id)
     summaryText.value = data.summary_feedback || t('feedback.noSummary')
+    errorCount.value = data.error_count ?? errorCount.value
     if (sessionStore.currentSession) {
       sessionStore.currentSession.is_active = false
     }
@@ -411,16 +417,6 @@ const sendMessage = async () => {
 
     sessionStore.incrementRound()
 
-    if (result.pragmatic_check?.has_error && result.user_message?.id) {
-      messageErrors.value[result.user_message.id] = {
-        message_id: result.user_message.id,
-        error_type: result.pragmatic_check.error_type,
-        suggestion: result.pragmatic_check.suggestion,
-        explanation: result.pragmatic_check.explanation,
-      }
-      errorCount.value++
-    }
-
     await nextTick()
     scrollToBottom()
 
@@ -429,6 +425,7 @@ const sendMessage = async () => {
       sessionActive.value = false
       if (countdownTimer) clearInterval(countdownTimer)
       summaryText.value = result.session_summary || t('feedback.noSummary')
+      errorCount.value = result.session_error_count ?? errorCount.value
       autoEndReason.value = t('feedback.autoEndRounds')
       showSummary.value = true
       if (sessionStore.currentSession) {
@@ -463,6 +460,7 @@ const endSession = async () => {
 
     const data = await api.endSession(sessionStore.currentSession.id)
     summaryText.value = data.summary_feedback || t('feedback.noSummary')
+    errorCount.value = data.error_count ?? errorCount.value
 
     if (sessionStore.currentSession) {
       sessionStore.currentSession.is_active = false
@@ -511,6 +509,40 @@ const getLanguageName = (lang) => {
   const map = { EN: 'English', ZH: '中文', JP: '日本語', KR: '한국어', FR: 'Français', DE: 'Deutsch' }
   return map[lang] || lang || ''
 }
+
+const getLanguageNameByCountry = (country) => {
+  const map = { CN: '中文', TW: '中文', HK: '中文', SG: '中文', JP: '日本語', KR: '한국어', FR: 'Français', DE: 'Deutsch', US: 'English', GB: 'English', CA: 'English', AU: 'English' }
+  return map[country] || 'English'
+}
+
+const getCountryLabel = (country) => {
+  return t(`countries.${country}`)
+}
+
+const targetLanguageToCountry = (lang) => {
+  const map = { EN: 'US', ZH: 'CN', JP: 'JP', KR: 'KR', FR: 'FR', DE: 'DE' }
+  return map[lang] || 'US'
+}
+
+const learnerNativeCountryForTarget = (lang) => {
+  const map = { EN: 'CN', FR: 'CN', DE: 'CN', ZH: 'US', JP: 'US', KR: 'JP' }
+  return map[lang] || 'CN'
+}
+
+const llmPersonaInfo = computed(() => {
+  const session = sessionStore.currentSession
+  if (!session) {
+    return { country: 'US', culture: getCountryLabel('US'), nativeLanguage: 'English' }
+  }
+  const country = session.mode === 'user_l2'
+    ? targetLanguageToCountry(session.target_language)
+    : learnerNativeCountryForTarget(session.target_language)
+  return {
+    country,
+    culture: getCountryLabel(country),
+    nativeLanguage: getLanguageNameByCountry(country)
+  }
+})
 
 const getInputPlaceholder = () => {
   if (!sessionActive.value) return ''

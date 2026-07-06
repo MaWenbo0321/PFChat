@@ -112,8 +112,9 @@ func endSession(c *gin.Context) {
 
 	// 生成汇总反馈
 	summaryFeedback := ""
+	sessionErrorCount := 0
 	if len(messages) >= 2 {
-		summaryFeedback = generateSessionSummary(session, messages, user)
+		summaryFeedback, sessionErrorCount = generateAndStoreSessionFeedback(session, messages, user)
 	}
 
 	// 更新会话状态
@@ -125,6 +126,7 @@ func endSession(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message":          "会话已结束",
 		"summary_feedback": summaryFeedback,
+		"error_count":      sessionErrorCount,
 		"round_count":      session.RoundCount,
 	})
 }

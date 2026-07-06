@@ -194,6 +194,9 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("- 只评价当前分析对象，不把历史消息中的问题归因到当前消息。\n")
 		sb.WriteString("- llm_l2 模式中，LLM Bot 会适当模拟二语学习者的语用问题；如果当前分析对象是 LLM Bot 回复，请识别其故意触发的语用失误。\n")
 		sb.WriteString("- user_l2 模式中，重点评估用户用目标语言与母语者交流时的语用得体性。\n\n")
+		if current.Role == ErrorSourceLLM {
+			sb.WriteString("重要说明: 当前被分析对象是 LLM Bot 模拟的第二语言说话者。explanation 必须写给 Human Listener，说明这句话可能让听者如何理解、为什么它是一个训练样例，以及听者可以观察到什么；不要用“你应该...”对 LLM Bot 说教。\n\n")
+		}
 
 		sb.WriteString("字段含义:\n")
 		sb.WriteString("- impoliteness: 当前消息是否明显不礼貌、冒犯、命令感过强或缺少必要缓和。\n")
@@ -222,6 +225,9 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("- Evaluate only the current analysis target; do not attribute issues in previous messages to the current message.\n")
 		sb.WriteString("- In llm_l2 mode, the LLM bot may appropriately simulate L2 pragmatic problems; if the current analysis target is an LLM Bot reply, identify the intentionally triggered pragmatic failure.\n")
 		sb.WriteString("- In user_l2 mode, focus on whether the user's target-language message is pragmatically appropriate for a native-speaker interlocutor.\n\n")
+		if current.Role == ErrorSourceLLM {
+			sb.WriteString("Important: the current target is an LLM Bot simulating an L2 speaker. The explanation must be written for the Human Listener: explain how the listener may interpret the utterance, why it works as a training sample, and what the listener can observe. Do not lecture the LLM Bot with 'you should...'.\n\n")
+		}
 
 		sb.WriteString("Field meanings:\n")
 		sb.WriteString("- impoliteness: whether the current message is clearly rude, offensive, too commanding, or lacks necessary mitigation.\n")
@@ -613,6 +619,40 @@ func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
 	}
 
 	return &result, nil
+}
+
+func callDashScopeJSON(prompt string, target any, maxCompletionTokens int) error {
+	reqBody := DashScopeRequest{
+		Model: getDashScopeModel(),
+		Input: DashScopeInput{
+			Messages: []DashScopeMessage{
+				newDashScopeTextMessage("user", prompt),
+			},
+		},
+		Parameters: DashScopeParameters{
+			ResultFormat:        "message",
+			Temperature:         0.2,
+			MaxCompletionTokens: maxCompletionTokens,
+			ResponseFormat:      &DashScopeResponseFormat{Type: "json_object"},
+			EnableThinking:      boolPtr(false),
+		},
+	}
+
+	dashResp, err := makeDashScopeRequest(getDashScopeAPIKey(), reqBody)
+	if err != nil {
+		return err
+	}
+
+	responseText := getDashScopeResponseText(dashResp)
+	if strings.TrimSpace(responseText) == "" {
+		return fmt.Errorf("empty JSON response from LLM")
+	}
+
+	jsonStr := extractJSON(responseText)
+	if err := json.Unmarshal([]byte(jsonStr), target); err != nil {
+		return fmt.Errorf("解析 JSON 响应失败: %v, raw: %s", err, jsonStr)
+	}
+	return nil
 }
 func extractJSON(text string) string {
 	text = strings.ReplaceAll(text, "```json", "")
