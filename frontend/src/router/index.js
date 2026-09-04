@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useSessionStore } from '@/stores/session'
 
 const routes = [
     {
@@ -51,7 +52,9 @@ router.beforeEach((to, from, next) => {
     const userStore = useUserStore()
 
     // 检查是否需要认证
-    if (to.meta.requiresAuth && !userStore.token) {
+    if (to.meta.requiresAuth && (!userStore.token || !userStore.userInfo)) {
+		userStore.logout()
+        useSessionStore().clearSession()
         next('/login')
         return
     }
@@ -66,7 +69,7 @@ router.beforeEach((to, from, next) => {
     }
 
     // 如果已登录用户访问登录页，重定向到设置页
-    if (to.path === '/login' && userStore.token) {
+    if (to.path === '/login' && userStore.token && userStore.userInfo) {
         next('/setup')
         return
     }

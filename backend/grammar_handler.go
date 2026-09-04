@@ -22,6 +22,7 @@ type MessageErrorInfo struct {
 }
 
 func getMessageErrorsByIds(c *gin.Context) {
+	userID := getCurrentUserID(c)
 	var req GetMessageErrorsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求参数"})
@@ -34,7 +35,11 @@ func getMessageErrorsByIds(c *gin.Context) {
 	}
 
 	var errors []GrammarError
-	db.Where("message_id IN ? AND message_id > 0", req.MessageIDs).Find(&errors)
+	if err := db.Where("user_id = ? AND message_id IN ? AND message_id > 0", userID, req.MessageIDs).
+		Find(&errors).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取消息反馈失败"})
+		return
+	}
 
 	result := make([]MessageErrorInfo, 0, len(errors))
 	for _, err := range errors {

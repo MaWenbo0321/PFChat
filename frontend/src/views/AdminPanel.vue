@@ -72,7 +72,7 @@
               <el-input
                   v-model="searchKeyword"
                   placeholder="搜索用户名或国家"
-                  prefix-icon="Search"
+                  :prefix-icon="Search"
                   clearable
                   style="width: 250px"
                   @input="searchUsers"
@@ -166,7 +166,8 @@ import {
   Avatar,
   ChatDotRound,
   Warning,
-  Refresh
+  Refresh,
+  Search
 } from '@element-plus/icons-vue'
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
@@ -211,7 +212,13 @@ onMounted(async () => {
 const loadStats = async () => {
   try {
     const result = await api.getUserStats()
-    stats.value = result
+    stats.value = {
+      totalUsers: result.total_users ?? 0,
+      adminUsers: result.admin_users ?? 0,
+      regularUsers: result.regular_users ?? 0,
+      totalMessages: result.total_messages ?? 0,
+      totalGrammarErrors: result.total_grammar_errors ?? 0
+    }
   } catch (error) {
     console.error('Load stats error:', error)
   }
@@ -224,7 +231,7 @@ const loadUsers = async () => {
     allUsers.value = result.users
   } catch (error) {
     console.error('Load users error:', error)
-    ElMessage.error('加载用户列表失败')
+    if (!error?.pfchatNotified) ElMessage.error('加载用户列表失败')
   } finally {
     loading.value = false
   }

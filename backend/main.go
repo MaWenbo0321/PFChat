@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -81,7 +82,9 @@ func main() {
 	})
 
 	log.Println("Server starting on :8080")
-	r.Run("0.0.0.0:8080")
+	if err := r.Run("0.0.0.0:8080"); err != nil {
+		log.Fatal("Server failed:", err)
+	}
 }
 
 func initDB() {
@@ -93,7 +96,9 @@ func initDB() {
 	}
 
 	// 自动迁移
-	db.AutoMigrate(&User{}, &Message{}, &GrammarError{}, &ConversationSession{})
+	if err := db.AutoMigrate(&User{}, &Message{}, &GrammarError{}, &ConversationSession{}); err != nil {
+		log.Fatal("Failed to migrate database:", err)
+	}
 
 	// 创建默认管理员账号
 	createDefaultAdmin()
@@ -106,7 +111,15 @@ func initDB() {
 
 func createLLMBotUser() {
 	var botUser User
-	if err := db.Where("role = ?", RoleBot).First(&botUser).Error; err != nil {
+	err := db.Where("role = ?", RoleBot).First(&botUser).Error
+	if err == nil {
+		return
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("Failed to query LLM bot user: %v", err)
+		return
+	}
+	{
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("llmbot_not_login"), bcrypt.DefaultCost)
 		if err != nil {
 			log.Printf("Failed to hash bot password: %v", err)
@@ -128,7 +141,15 @@ func createLLMBotUser() {
 
 func createDefaultAdmin() {
 	var adminUser User
-	if err := db.Where("role = ?", RoleAdmin).First(&adminUser).Error; err != nil {
+	err := db.Where("role = ?", RoleAdmin).First(&adminUser).Error
+	if err == nil {
+		return
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("Failed to query default admin: %v", err)
+		return
+	}
+	{
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123456"), bcrypt.DefaultCost)
 		if err != nil {
 			log.Printf("Failed to hash admin password: %v", err)

@@ -19,7 +19,7 @@
             type="danger"
             :icon="Delete"
             @click="clearAll"
-            :disabled="errors.length === 0"
+            :disabled="statistics.total === 0"
         >
           {{ $t('grammar.clearAll') }}
         </el-button>
@@ -41,7 +41,7 @@
         <el-input
             v-model="searchKeyword"
             :placeholder="$t('grammar.search')"
-            prefix-icon="Search"
+            :prefix-icon="Search"
             clearable
             style="width: 300px"
         />
@@ -57,6 +57,7 @@
           <el-option :label="$t('grammar.errorType3')" value="严重语用语言失误" />
           <el-option :label="$t('grammar.errorType4')" value="严重社会语用失误" />
           <el-option :label="$t('grammar.errorType5')" value="语用语言失误和社会语用失误" />
+          <el-option :label="$t('grammar.errorType6')" value="无明显语用失误" />
         </el-select>
       </div>
 
@@ -70,12 +71,12 @@
                   {{ getErrorTypeLabel(errorType) }}
                 </el-tag>
                 <el-tag
-                    :type="isProblematicType(errorType) ? 'danger' : 'warning'"
+                    :type="getSeverityTagType(errorType)"
                     size="small"
                     effect="plain"
                     style="margin-left: 8px;"
                 >
-                  {{ isProblematicType(errorType) ? $t('grammar.severityProblematic') : $t('grammar.severityImprovable') }}
+                  {{ getSeverityLabel(errorType) }}
                 </el-tag>
                 <span class="group-count">({{ groupErrors.length }})</span>
               </h2>
@@ -180,6 +181,7 @@
             <el-option :label="$t('grammar.errorType3')" value="严重语用语言失误" />
             <el-option :label="$t('grammar.errorType4')" value="严重社会语用失误" />
             <el-option :label="$t('grammar.errorType5')" value="语用语言失误和社会语用失误" />
+            <el-option :label="$t('grammar.errorType6')" value="无明显语用失误" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -205,7 +207,8 @@ import {
   Warning,
   CopyDocument,
   MoreFilled,
-  Edit
+  Edit,
+  Search
 } from '@element-plus/icons-vue'
 import api from '@/api'
 
@@ -232,7 +235,8 @@ const ALL_ERROR_TYPES = [
   '社会语用失误',
   '严重语用语言失误',
   '严重社会语用失误',
-  '语用语言失误和社会语用失误'
+  '语用语言失误和社会语用失误',
+  '无明显语用失误'
 ]
 
 // 判断是否为严重(problematic)类型
@@ -243,6 +247,9 @@ const isProblematicType = (errorType) => {
 }
 
 const getSourceRoleLabel = (sourceRole) => {
+  if (sourceRole === 'session') {
+    return locale.value === 'zh-CN' ? '会话反馈' : 'Session feedback'
+  }
   if (sourceRole === 'llm') {
     return locale.value === 'zh-CN' ? 'LLM模拟学习者' : 'LLM learner'
   }
@@ -250,10 +257,23 @@ const getSourceRoleLabel = (sourceRole) => {
 }
 // 获取错误类型的 tag 颜色
 const getErrorTagType = (errorType) => {
+  if (errorType === '无明显语用失误') {
+    return 'success'
+  }
   if (isProblematicType(errorType)) {
     return 'danger' // 红色
   }
   return 'warning' // 橙色
+}
+
+const getSeverityTagType = (errorType) => {
+  if (errorType === '无明显语用失误') return 'success'
+  return isProblematicType(errorType) ? 'danger' : 'warning'
+}
+
+const getSeverityLabel = (errorType) => {
+  if (errorType === '无明显语用失误') return locale.value === 'zh-CN' ? '良好' : 'Good'
+  return isProblematicType(errorType) ? t('grammar.severityProblematic') : t('grammar.severityImprovable')
 }
 
 // 获取错误类型的本地化标签
@@ -264,6 +284,7 @@ const getErrorTypeLabel = (errorType) => {
     '严重语用语言失误': t('grammar.errorType3'),
     '严重社会语用失误': t('grammar.errorType4'),
     '语用语言失误和社会语用失误': t('grammar.errorType5'),
+    '无明显语用失误': t('grammar.errorType6'),
   }
   return labelMap[errorType] || errorType
 }
@@ -288,9 +309,9 @@ const filteredErrors = computed(() => {
 
   const keyword = searchKeyword.value.toLowerCase()
   return errors.value.filter(e =>
-      e.original_text.toLowerCase().includes(keyword) ||
-      e.llm_suggestion.toLowerCase().includes(keyword) ||
-      e.llm_explanation.toLowerCase().includes(keyword) ||
+      String(e.original_text || '').toLowerCase().includes(keyword) ||
+      String(e.llm_suggestion || '').toLowerCase().includes(keyword) ||
+      String(e.llm_explanation || '').toLowerCase().includes(keyword) ||
       getSourceRoleLabel(e.source_role).toLowerCase().includes(keyword)
   )
 })
@@ -321,20 +342,8 @@ onMounted(async () => {
 const loadErrors = async (errorType = 'all') => {
   try {
     const response = await api.getGrammarErrors(errorType)
-    const rawErrors = response.errors || []
-
-    // 去重: 相同 original_text + error_type 的记录只保留最新一条
-    const deduped = []
-    const seen = new Set()
-    for (const err of rawErrors) {
-      const key = `${err.source_role || 'user'}||${err.original_text}||${err.error_type}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        deduped.push(err)
-      }
-    }
-
-    errors.value = deduped
+    // 每条记录代表一次真实会话/消息事件；文本相同不等于重复记录。
+    errors.value = response.errors || []
     statistics.value = response.statistics || {
       total: 0,
       by_type: {},
@@ -343,7 +352,7 @@ const loadErrors = async (errorType = 'all') => {
     }
   } catch (error) {
     console.error('Load errors:', error)
-    ElMessage.error(t('common.error'))
+    if (!error?.pfchatNotified) ElMessage.error(t('common.error'))
   }
 }
 
@@ -375,7 +384,7 @@ const confirmChangeType = async () => {
     await loadErrors(currentTypeFilter.value)
   } catch (error) {
     console.error('Update type error:', error)
-    ElMessage.error(t('grammar.updateTypeFailed'))
+    if (!error?.pfchatNotified) ElMessage.error(t('grammar.updateTypeFailed'))
   }
 }
 
@@ -429,7 +438,7 @@ const clearCurrentType = async () => {
 const clearAll = async () => {
   try {
     await ElMessageBox.confirm(
-        t('grammar.clearAllConfirm', { count: errors.value.length }),
+        t('grammar.clearAllConfirm', { count: statistics.value.total }),
         t('chat.warning'),
         {
           confirmButtonText: t('chat.confirmClear'),

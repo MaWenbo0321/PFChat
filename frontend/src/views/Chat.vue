@@ -34,31 +34,32 @@
         </div>
         <div class="session-info-item">
           <span class="info-label">{{ $t('chat.aiCulture') }}:</span>
-          <span class="info-value">{{ llmPersonaInfo.culture }}</span>
+          <span class="info-value">{{ llmPersonaInfo.name }} · {{ llmPersonaInfo.culture }}</span>
         </div>
         <div class="session-info-item">
           <span class="info-label">{{ $t('chat.rounds') }}:</span>
           <span class="info-value round-count">{{ sessionStore.currentSession.round_count || 0 }}</span>
-          <span v-if="sessionStore.currentSession.feedback_mode === 'rounds_5'" class="rounds-limit"> / 5</span>
         </div>
 
         <!-- 倒计时（完整对话模式） -->
-        <div v-if="sessionStore.currentSession.feedback_mode === 'complete' && sessionActive && timeRemaining > 0" class="timer-info" :class="{ 'timer-warning': timeRemaining <= 60 }">
+        <div v-if="aiSuggestionsEnabled && sessionStore.currentSession.feedback_mode === 'complete' && sessionActive && timeRemaining > 0" class="timer-info" :class="{ 'timer-warning': timeRemaining <= 60 }">
           <el-icon><Timer /></el-icon>
           <span>{{ formatTimeRemaining() }}</span>
         </div>
 
         <el-divider />
-        <el-button type="danger" plain size="small" @click="endSession" class="end-session-btn" :disabled="!sessionActive">
-          {{ $t('chat.endSession') }}
-        </el-button>
-        <el-button plain size="small" @click="goToSetup" class="new-session-btn">
-          {{ $t('chat.newSession') }}
-        </el-button>
+        <div class="session-actions">
+          <el-button type="danger" plain size="small" @click="endSession" class="end-session-btn" :disabled="!sessionActive || isSending">
+            {{ $t('chat.endSession') }}
+          </el-button>
+          <el-button plain size="small" @click="goToSetup" class="new-session-btn" :disabled="sessionActive || isSending || summaryLoading">
+            {{ $t('chat.newSession') }}
+          </el-button>
+        </div>
       </div>
 
       <!-- 语用错误统计 -->
-      <div v-if="errorCount > 0" class="error-stats">
+      <div v-if="aiSuggestionsEnabled && errorCount > 0" class="error-stats">
         <div class="error-stats-title">{{ $t('chat.pragmaticErrors') }}</div>
         <div class="error-stats-count">
           <el-icon color="#e6a23c"><WarningFilled /></el-icon>
@@ -77,17 +78,20 @@
               <el-icon :size="24" color="white"><ChatDotRound /></el-icon>
             </div>
             <div>
-              <div class="username">{{ $t('chat.llmBot') }}</div>
+              <div class="username">{{ llmPersonaInfo.name }}</div>
               <div class="country">
                 <el-tag size="small" effect="plain" :type="sessionStore.currentSession?.mode === 'user_l2' ? 'primary' : 'success'">
                   {{ sessionStore.currentSession?.mode === 'user_l2' ? $t('setup.modeUserL2Short') : $t('setup.modeLLML2Short') }}
                 </el-tag>
-                <span class="target-lang">{{ getLanguageName(sessionStore.currentSession?.target_language) }} · {{ llmPersonaInfo.culture }}</span>
+                <span class="target-lang">{{ llmPersonaInfo.name }} · {{ getLanguageName(sessionStore.currentSession?.target_language) }} · {{ llmPersonaInfo.culture }}</span>
               </div>
             </div>
           </div>
           <div class="header-right">
-            <el-tag v-if="sessionStore.currentSession?.feedback_mode === 'complete'" size="small" type="info">
+            <el-tag v-if="!aiSuggestionsEnabled" size="small" type="info">
+              {{ $t('setup.aiSuggestionsOff') }}
+            </el-tag>
+            <el-tag v-else-if="sessionStore.currentSession?.feedback_mode === 'complete'" size="small" type="info">
               {{ $t('setup.feedbackComplete') }}
             </el-tag>
             <el-tag v-else size="small" type="success">
@@ -106,7 +110,9 @@
               <p>{{ getWelcomeMessage() }}</p>
               <div class="welcome-tips">
                 <p>{{ $t('chat.aiCultureHint', { culture: llmPersonaInfo.culture, native: llmPersonaInfo.nativeLanguage }) }}</p>
-                <p v-if="sessionStore.currentSession?.mode === 'user_l2'">{{ $t('chat.tipUserL2') }}</p>
+                <p v-if="!aiSuggestionsEnabled">{{ $t('chat.tipSuggestionsOff') }}</p>
+                <p v-else-if="sessionStore.currentSession?.feedback_mode === 'rounds_5'">{{ $t('chat.tipPerTurn') }}</p>
+                <p v-else-if="sessionStore.currentSession?.mode === 'user_l2'">{{ $t('chat.tipUserL2') }}</p>
                 <p v-else>{{ $t('chat.tipLLML2') }}</p>
               </div>
             </div>
@@ -126,13 +132,13 @@
             <div class="message">
               <div class="message-header">
                 <span class="message-sender">
-                  {{ msg.role === 'llm' || msg.sender_id !== userStore.userInfo.id ? $t('chat.llmBot') : userStore.userInfo.username }}
+                  {{ msg.role === 'llm' || msg.sender_id !== userStore.userInfo.id ? llmPersonaInfo.name : userStore.userInfo.username }}
                 </span>
                 <span class="message-time">{{ formatMessageTime(msg.created_at) }}</span>
               </div>
               <div class="message-text">{{ msg.content }}</div>
-              <!-- 语用错误标识（用户消息） -->
-              <div v-if="(msg.role === 'user' || msg.sender_id === userStore.userInfo.id) && messageErrors[msg.id]" class="message-error-badge">
+              <!-- 语用错误标识（当前学习者的消息） -->
+              <div v-if="aiSuggestionsEnabled && messageErrors[msg.id]" class="message-error-badge">
                 <el-popover
                   placement="top"
                   :width="300"
@@ -184,7 +190,7 @@
               class="input-editor"
               :placeholder="getInputPlaceholder()"
               @keydown.ctrl.enter="sendMessage"
-              :disabled="isSending || !sessionActive"
+              :disabled="isSending || showTurnFeedback || !sessionActive"
             ></textarea>
             <div class="input-status-bar">
               <div class="status-left">
@@ -195,7 +201,7 @@
                   type="primary"
                   :icon="Promotion"
                   @click="sendMessage"
-                  :disabled="!messageInput.trim() || isSending || !sessionStore.currentSession || !sessionActive"
+                  :disabled="!messageInput.trim() || isSending || showTurnFeedback || !sessionStore.currentSession || !sessionActive"
                   size="small"
                 >
                   {{ $t('chat.send') }}
@@ -206,6 +212,48 @@
         </div>
       </div>
     </div>
+
+    <!-- 每轮只展示一次反馈，关闭弹窗不会结束会话。 -->
+    <el-dialog
+      v-model="showTurnFeedback"
+      :title="$t('feedback.turnTitle', { round: sessionStore.currentSession?.round_count || 0 })"
+      width="min(600px, 92vw)"
+      :close-on-click-modal="false"
+      @closed="focusInput"
+    >
+      <div class="turn-feedback-content">
+        <el-alert
+          :title="!turnFeedback.check ? $t('feedback.checkUnavailable') : turnFeedback.check.has_error ? $t('feedback.issueFound') : $t('feedback.noIssue')"
+          :type="!turnFeedback.check ? 'warning' : turnFeedback.check.has_error ? 'warning' : 'success'"
+          :closable="false"
+          show-icon
+        />
+        <p class="turn-feedback-target">{{ turnFeedback.source === 'llm' ? $t('feedback.targetLLM') : $t('feedback.targetUser') }}</p>
+        <div class="error-popover-section">
+          <div class="error-popover-label">{{ $t('chat.originalMessage') }}</div>
+          <div class="turn-feedback-text">{{ turnFeedback.content }}</div>
+        </div>
+        <template v-if="turnFeedback.check?.has_error">
+          <div class="error-popover-section">
+            <div class="error-popover-label">{{ $t('chat.errorType') }}</div>
+            <el-tag :type="isProblematicType(turnFeedback.check.error_type) ? 'danger' : 'warning'">{{ turnFeedback.check.error_type }}</el-tag>
+          </div>
+          <div class="error-popover-section">
+            <div class="error-popover-label">{{ $t('chat.suggestion') }}</div>
+            <div class="turn-feedback-text suggestion-text">{{ turnFeedback.check.suggestion || $t('feedback.noSuggestion') }}</div>
+          </div>
+          <div class="error-popover-section">
+            <div class="error-popover-label">{{ $t('chat.explanation') }}</div>
+            <div class="turn-feedback-text">{{ turnFeedback.check.explanation || $t('feedback.noExplanation') }}</div>
+          </div>
+        </template>
+        <p v-else class="turn-feedback-text">{{ turnFeedback.check ? $t('feedback.noIssueExplanation') : $t('feedback.checkUnavailableExplanation') }}</p>
+        <p class="turn-feedback-hint">{{ $t('feedback.keepChatting') }}</p>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="showTurnFeedback = false">{{ $t('feedback.continue') }}</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 会话汇总对话框 -->
     <el-dialog
@@ -275,6 +323,14 @@ const sessionActive = ref(true)
 // ===================== 消息错误标识 =====================
 const messageErrors = ref({})
 const errorCount = ref(0)
+const aiSuggestionsEnabled = computed(() => sessionStore.currentSession?.ai_suggestions_enabled !== false)
+const usesSessionSummary = computed(() => aiSuggestionsEnabled.value && sessionStore.currentSession?.feedback_mode === 'complete')
+
+const showTurnFeedback = ref(false)
+const turnFeedback = ref({ check: null, content: '', source: 'user' })
+const focusInput = () => {
+  if (sessionActive.value) textareaRef.value?.focus()
+}
 
 // ===================== 汇总对话框状态 =====================
 const showSummary = ref(false)
@@ -286,6 +342,8 @@ const autoEndReason = ref('')
 const SESSION_DURATION = 10 * 60 // 10分钟（秒）
 const timeRemaining = ref(SESSION_DURATION)
 let countdownTimer = null
+let timeoutWarningShown = false
+let autoEndPending = false
 
 const formatTimeRemaining = () => {
   const min = Math.floor(timeRemaining.value / 60)
@@ -294,31 +352,53 @@ const formatTimeRemaining = () => {
 }
 
 const startCountdown = () => {
-  if (!sessionStore.currentSession || sessionStore.currentSession.feedback_mode !== 'complete') return
-  countdownTimer = setInterval(() => {
+  if (!aiSuggestionsEnabled.value || !sessionStore.currentSession || sessionStore.currentSession.feedback_mode !== 'complete') return
+
+  if (countdownTimer) clearInterval(countdownTimer)
+  const createdAt = Date.parse(sessionStore.currentSession.created_at)
+  const deadline = Number.isFinite(createdAt)
+    ? createdAt + SESSION_DURATION * 1000
+    : Date.now() + SESSION_DURATION * 1000
+
+  const updateCountdown = () => {
     if (!sessionActive.value) {
       clearInterval(countdownTimer)
+      countdownTimer = null
       return
     }
-    timeRemaining.value--
-    if (timeRemaining.value === 60) {
+
+    const previous = timeRemaining.value
+    timeRemaining.value = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+    if (!timeoutWarningShown && previous > 60 && timeRemaining.value <= 60 && timeRemaining.value > 0) {
+      timeoutWarningShown = true
       ElMessage.warning(t('feedback.timeoutWarning'))
     }
     if (timeRemaining.value <= 0) {
       clearInterval(countdownTimer)
-      autoEndSession('timeout')
+      countdownTimer = null
+      autoEndSession()
     }
-  }, 1000)
+  }
+
+  timeRemaining.value = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+  timeoutWarningShown = timeRemaining.value <= 60
+  if (timeRemaining.value <= 0) {
+    autoEndSession()
+    return
+  }
+  countdownTimer = setInterval(updateCountdown, 1000)
 }
 
-const autoEndSession = async (reason) => {
+const autoEndSession = async () => {
+  if (isSending.value) {
+    autoEndPending = true
+    return
+  }
   if (!sessionActive.value || !sessionStore.currentSession) return
   sessionActive.value = false
   summaryLoading.value = true
   showSummary.value = true
-  autoEndReason.value = reason === 'timeout'
-    ? t('feedback.autoEndTimeout')
-    : t('feedback.autoEndRounds')
+  autoEndReason.value = t('feedback.autoEndTimeout')
 
   try {
     const data = await api.endSession(sessionStore.currentSession.id)
@@ -329,7 +409,20 @@ const autoEndSession = async (reason) => {
     }
   } catch (error) {
     console.error('Auto end session error:', error)
-    summaryText.value = t('feedback.noSummary')
+    showSummary.value = false
+    autoEndReason.value = ''
+    // 结束请求失败时以服务端状态为准；无法确认时保持禁用，避免向可能已结束的会话继续发送。
+    try {
+      const data = await api.getActiveSession()
+      const activeSession = data.session
+      if (activeSession?.id === sessionStore.currentSession?.id) {
+        sessionStore.setSession(activeSession)
+        sessionActive.value = true
+      }
+    } catch (syncError) {
+      console.error('Reconcile auto-ended session error:', syncError)
+    }
+    if (!error?.pfchatNotified) ElMessage.error(t('chat.endSessionFailed'))
   } finally {
     summaryLoading.value = false
   }
@@ -338,17 +431,27 @@ const autoEndSession = async (reason) => {
 // ===================== 生命周期 =====================
 onMounted(async () => {
   if (!sessionStore.currentSession) {
-    router.push('/setup')
-    return
-  }
-
-  if (sessionStore.currentSession.is_active === false) {
-    sessionActive.value = false
+    try {
+      const data = await api.getActiveSession()
+      if (!data.session) {
+        router.push('/setup')
+        return
+      }
+      sessionStore.setSession(data.session)
+    } catch (error) {
+      console.error('Restore active session error:', error)
+      router.push('/setup')
+      return
+    }
   }
 
   if (sessionStore.messages.length === 0) {
     await loadSessionMessages()
   }
+
+  // loadSessionMessages 可能用服务端状态替换当前会话，必须在加载后再判断。
+  sessionActive.value = sessionStore.currentSession?.is_active !== false
+  await loadMessageErrors()
   await nextTick()
   scrollToBottom()
 
@@ -359,6 +462,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (countdownTimer) clearInterval(countdownTimer)
+  autoEndPending = false
 })
 
 // ===================== 加载会话消息 =====================
@@ -368,7 +472,6 @@ const loadSessionMessages = async () => {
     const data = await api.getSessionMessages(sessionStore.currentSession.id)
     sessionStore.setMessages(data.messages || [])
     sessionStore.setSession(data.session)
-    await loadMessageErrors()
   } catch (e) {
     console.error('Load session messages error:', e)
   }
@@ -376,7 +479,12 @@ const loadSessionMessages = async () => {
 
 // ===================== 加载消息语用错误 =====================
 const loadMessageErrors = async () => {
-  const msgs = sessionStore.messages.filter(m => m.role === 'user' || m.sender_id === userStore.userInfo.id)
+  if (!aiSuggestionsEnabled.value) {
+    messageErrors.value = {}
+    errorCount.value = 0
+    return
+  }
+  const msgs = sessionStore.messages
   if (msgs.length === 0) return
   const msgIds = msgs.map(m => m.id).filter(Boolean)
   if (msgIds.length === 0) return
@@ -395,7 +503,7 @@ const loadMessageErrors = async () => {
 
 // ===================== 发送消息给LLM =====================
 const sendMessage = async () => {
-  if (isSending.value || !messageInput.value.trim() || !sessionStore.currentSession || !sessionActive.value) return
+  if (isSending.value || showTurnFeedback.value || !messageInput.value.trim() || !sessionStore.currentSession || !sessionActive.value) return
 
   isSending.value = true
   const content = messageInput.value.trim()
@@ -415,38 +523,57 @@ const sendMessage = async () => {
       sessionStore.addMessage(result.llm_response)
     }
 
-    sessionStore.incrementRound()
+    if (Number.isInteger(result.round_count)) {
+      sessionStore.setRoundCount(result.round_count)
+    } else {
+      sessionStore.incrementRound()
+    }
 
     await nextTick()
     scrollToBottom()
 
-    // 五轮模式自动结束
-    if (result.session_ended) {
-      sessionActive.value = false
-      if (countdownTimer) clearInterval(countdownTimer)
-      summaryText.value = result.session_summary || t('feedback.noSummary')
-      errorCount.value = result.session_error_count ?? errorCount.value
-      autoEndReason.value = t('feedback.autoEndRounds')
-      showSummary.value = true
-      if (sessionStore.currentSession) {
-        sessionStore.currentSession.is_active = false
+    if (aiSuggestionsEnabled.value && sessionStore.currentSession.feedback_mode === 'rounds_5') {
+      const isLLMLearner = sessionStore.currentSession.mode === 'llm_l2'
+      const check = isLLMLearner ? result.llm_pragmatic_check : result.pragmatic_check
+      const message = isLLMLearner ? result.llm_response : result.user_message
+      turnFeedback.value = { check: check || null, content: message?.content || '', source: isLLMLearner ? 'llm' : 'user' }
+      if (check?.has_error && message?.id) {
+        if (!messageErrors.value[message.id]) errorCount.value++
+        messageErrors.value[message.id] = check
       }
+      showTurnFeedback.value = true
     }
 
   } catch (error) {
     console.error('Send message error:', error)
-    ElMessage.error(t('chat.sendFailed'))
-    messageInput.value = content
+    if (error?.response?.status === 409) {
+      sessionActive.value = false
+      if (sessionStore.currentSession) sessionStore.currentSession.is_active = false
+      messageInput.value = content
+    } else {
+      if (!error?.pfchatNotified) ElMessage.error(t('chat.sendFailed'))
+      messageInput.value = content
+    }
   } finally {
     isSending.value = false
     isLLMTyping.value = false
+    if (autoEndPending && sessionActive.value && sessionStore.currentSession) {
+      autoEndPending = false
+      await autoEndSession()
+    }
   }
 }
 
 // ===================== 结束会话 =====================
 const endSession = async () => {
+  if (isSending.value || !sessionActive.value || !sessionStore.currentSession) return
   try {
-    await ElMessageBox.confirm(t('chat.endSessionConfirm'), t('chat.hint'), {
+    const confirmMessage = usesSessionSummary.value
+      ? t('chat.endSessionConfirm')
+      : aiSuggestionsEnabled.value
+        ? t('chat.endSessionConfirmPerTurn')
+        : t('chat.endSessionConfirmNoSuggestions')
+    await ElMessageBox.confirm(confirmMessage, t('chat.hint'), {
       confirmButtonText: t('common.confirm'),
       cancelButtonText: t('common.cancel'),
       type: 'warning'
@@ -454,6 +581,15 @@ const endSession = async () => {
 
     if (countdownTimer) clearInterval(countdownTimer)
     sessionActive.value = false
+
+    if (!usesSessionSummary.value) {
+      await api.endSession(sessionStore.currentSession.id)
+      if (sessionStore.currentSession) sessionStore.currentSession.is_active = false
+      ElMessage.success(t('chat.sessionEnded'))
+      goToSetup()
+      return
+    }
+
     summaryLoading.value = true
     showSummary.value = true
     autoEndReason.value = ''
@@ -466,12 +602,25 @@ const endSession = async () => {
       sessionStore.currentSession.is_active = false
     }
   } catch (error) {
-    if (error !== 'cancel') {
-      console.error('End session error:', error)
-      ElMessage.error(t('chat.endSessionFailed'))
+    if (error === 'cancel') {
+      return
     }
+    console.error('End session error:', error)
     showSummary.value = false
-    sessionActive.value = true
+    try {
+      const data = await api.getActiveSession()
+      const activeSession = data.session
+      if (activeSession?.id === sessionStore.currentSession?.id) {
+        sessionStore.setSession(activeSession)
+        sessionActive.value = true
+        startCountdown()
+      } else if (sessionStore.currentSession) {
+        sessionStore.currentSession.is_active = false
+      }
+    } catch (syncError) {
+      console.error('Reconcile ended session error:', syncError)
+    }
+    if (!error?.pfchatNotified) ElMessage.error(t('chat.endSessionFailed'))
   } finally {
     summaryLoading.value = false
   }
@@ -511,7 +660,7 @@ const getLanguageName = (lang) => {
 }
 
 const getLanguageNameByCountry = (country) => {
-  const map = { CN: '中文', TW: '中文', HK: '中文', SG: '中文', JP: '日本語', KR: '한국어', FR: 'Français', DE: 'Deutsch', US: 'English', GB: 'English', CA: 'English', AU: 'English' }
+  const map = { CN: '中文', TW: '中文', HK: '中文', SG: 'English/Mandarin', MY: 'Malay/English/Chinese', JP: '日本語', KR: '한국어', MN: 'Mongolian', FR: 'Français', DE: 'Deutsch', US: 'English', GB: 'English', CA: 'English', AU: 'English', NG: 'English + local languages', BR: 'Português', ZA: 'English + local languages', IN: 'Hindi/English', MX: 'Español' }
   return map[country] || 'English'
 }
 
@@ -524,20 +673,59 @@ const targetLanguageToCountry = (lang) => {
   return map[lang] || 'US'
 }
 
-const learnerNativeCountryForTarget = (lang) => {
-  const map = { EN: 'CN', FR: 'CN', DE: 'CN', ZH: 'US', JP: 'US', KR: 'JP' }
-  return map[lang] || 'CN'
+const roleProfiles = computed(() => ({
+  aiko: { name: t('setup.roleAikoName'), country: 'JP' },
+  minji: { name: t('setup.roleMinjiName'), country: 'KR' },
+  haruto: { name: t('setup.roleHarutoName'), country: 'JP' },
+  enkhjin: { name: t('setup.roleEnkhjinName'), country: 'MN' },
+  xiayu: { name: t('setup.roleXiayuName'), country: 'CN' },
+  nurul: { name: t('setup.roleNurulName'), country: 'MY' },
+  cheryl: { name: t('setup.roleCherylName'), country: 'SG' },
+  marcus: { name: t('setup.roleMarcusName'), country: 'DE' },
+  sofia: { name: t('setup.roleSofiaName'), country: 'FR' },
+  daniel: { name: t('setup.roleDanielName'), country: 'US' },
+  amara: { name: t('setup.roleAmaraName'), country: 'NG' },
+  joao: { name: t('setup.roleJoaoName'), country: 'BR' },
+  mia: { name: t('setup.roleMiaName'), country: 'AU' },
+  thabo: { name: t('setup.roleThaboName'), country: 'ZA' },
+  priya: { name: t('setup.rolePriyaName'), country: 'IN' },
+  lucia: { name: t('setup.roleLuciaName'), country: 'MX' }
+}))
+
+const firstDifferentCountry = (...excluded) => {
+  const countries = ['JP', 'US', 'CN', 'KR', 'MN', 'MY', 'SG', 'FR', 'DE', 'GB', 'CA', 'AU', 'NG', 'BR', 'ZA', 'IN', 'MX']
+  return countries.find(country => !excluded.includes(country)) || 'OTHER'
+}
+
+const resolveLLMLearnerCountry = (lang, userCountry, preferredCountry) => {
+  const targetCountry = targetLanguageToCountry(lang)
+  if (preferredCountry && preferredCountry !== userCountry && preferredCountry !== targetCountry) {
+    return preferredCountry
+  }
+  const candidatesByLang = {
+    EN: ['JP', 'KR', 'CN', 'MN', 'MY', 'SG', 'BR', 'NG', 'ZA', 'IN', 'MX', 'US', 'GB', 'CA', 'AU'],
+    FR: ['JP', 'KR', 'CN', 'MN', 'MY', 'SG', 'BR', 'NG', 'ZA', 'IN', 'MX', 'US', 'GB', 'CA', 'AU'],
+    DE: ['JP', 'KR', 'CN', 'MN', 'MY', 'SG', 'BR', 'NG', 'ZA', 'IN', 'MX', 'US', 'GB', 'CA', 'AU'],
+    ZH: ['US', 'JP', 'KR', 'MN', 'MY', 'SG', 'FR', 'DE', 'BR', 'NG', 'ZA', 'IN', 'MX', 'GB', 'CA', 'AU'],
+    JP: ['US', 'CN', 'KR', 'MN', 'MY', 'SG', 'FR', 'DE', 'BR', 'NG', 'ZA', 'IN', 'MX', 'GB', 'CA', 'AU'],
+    KR: ['JP', 'US', 'CN', 'MN', 'MY', 'SG', 'FR', 'DE', 'BR', 'NG', 'ZA', 'IN', 'MX', 'GB', 'CA', 'AU']
+  }
+  const candidates = candidatesByLang[lang] || ['JP', 'US', 'CN', 'KR', 'MN', 'MY', 'SG', 'FR', 'DE', 'GB', 'CA', 'AU', 'NG', 'BR', 'ZA', 'IN', 'MX']
+  return candidates.find(country => country !== userCountry && country !== targetCountry)
+    || firstDifferentCountry(userCountry, targetCountry)
 }
 
 const llmPersonaInfo = computed(() => {
   const session = sessionStore.currentSession
+  const role = roleProfiles.value[session?.llm_role_id] || roleProfiles.value.aiko
   if (!session) {
-    return { country: 'US', culture: getCountryLabel('US'), nativeLanguage: 'English' }
+    return { name: role.name, country: role.country, culture: getCountryLabel(role.country), nativeLanguage: getLanguageNameByCountry(role.country) }
   }
   const country = session.mode === 'user_l2'
-    ? targetLanguageToCountry(session.target_language)
-    : learnerNativeCountryForTarget(session.target_language)
+    ? role.country
+    : resolveLLMLearnerCountry(session.target_language, userStore.userInfo?.country, role.country)
   return {
+    name: role.name,
     country,
     culture: getCountryLabel(country),
     nativeLanguage: getLanguageNameByCountry(country)
@@ -621,6 +809,23 @@ watch(() => sessionStore.messages.length, async () => {
 </script>
 
 <style scoped>
+.turn-feedback-content {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.turn-feedback-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.turn-feedback-target,
+.turn-feedback-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
 .chat-container {
   display: flex;
   height: 100vh;
@@ -696,11 +901,6 @@ watch(() => sessionStore.messages.length, async () => {
   color: #409eff;
 }
 
-.rounds-limit {
-  font-size: 14px;
-  color: #909399;
-}
-
 .timer-info {
   display: flex;
   align-items: center;
@@ -718,10 +918,20 @@ watch(() => sessionStore.messages.length, async () => {
   background: #fdf6ec;
 }
 
+.session-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .end-session-btn,
 .new-session-btn {
   width: 100%;
-  margin-bottom: 8px;
+  margin: 0;
+}
+
+.session-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .error-stats {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -47,10 +48,21 @@ type DashScopeParameters struct {
 	MaxCompletionTokens int                      `json:"max_completion_tokens,omitempty"`
 	ResponseFormat      *DashScopeResponseFormat `json:"response_format,omitempty"`
 	EnableThinking      *bool                    `json:"enable_thinking,omitempty"`
+	IncrementalOutput   *bool                    `json:"incremental_output,omitempty"`
+	EnableSearch        *bool                    `json:"enable_search,omitempty"`
+	SearchOptions       *DashScopeSearchOptions  `json:"search_options,omitempty"`
 }
 
 type DashScopeResponseFormat struct {
 	Type string `json:"type"`
+}
+
+type DashScopeSearchOptions struct {
+	ForcedSearch   bool   `json:"forced_search,omitempty"`
+	EnableSource   bool   `json:"enable_source,omitempty"`
+	EnableCitation bool   `json:"enable_citation,omitempty"`
+	CitationFormat string `json:"citation_format,omitempty"`
+	SearchStrategy string `json:"search_strategy,omitempty"`
 }
 
 type DashScopeStatusCode int
@@ -91,7 +103,10 @@ type DashScopeResponse struct {
 	Output     struct {
 		Text         string `json:"text,omitempty"`
 		FinishReason string `json:"finish_reason,omitempty"`
-		Choices      []struct {
+		SearchInfo   struct {
+			SearchResults []DashScopeSearchResult `json:"search_results,omitempty"`
+		} `json:"search_info,omitempty"`
+		Choices []struct {
 			FinishReason string                   `json:"finish_reason"`
 			Message      DashScopeResponseMessage `json:"message"`
 		} `json:"choices,omitempty"`
@@ -101,6 +116,13 @@ type DashScopeResponse struct {
 		OutputTokens int `json:"output_tokens"`
 		TotalTokens  int `json:"total_tokens"`
 	} `json:"usage,omitempty"`
+}
+
+type DashScopeSearchResult struct {
+	Index    any    `json:"index,omitempty"`
+	Title    string `json:"title,omitempty"`
+	URL      string `json:"url,omitempty"`
+	SiteName string `json:"site_name,omitempty"`
 }
 
 type DashScopeResponseMessage struct {
@@ -166,6 +188,13 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 	targetLang := getLanguageFullName(session.TargetLanguage)
 	suggestionLang := getSuggestionLanguageName(msgLang, session.TargetLanguage, isChineseMsg)
 	analysisTarget := getAnalysisTargetName(current.Role, isChineseMsg)
+	roleProfile := getLLMRoleProfile(session.LLMRoleID)
+	humanUser := sender
+	if current.Role == ErrorSourceLLM {
+		humanUser = receiver
+	}
+	llmCountry := getLLMPersonaNativeCountry(session, humanUser)
+	llmNativeLang := getLanguageNameByCountry(llmCountry)
 	explanationCountry := sender.Country
 	if current.Role == ErrorSourceLLM {
 		explanationCountry = receiver.Country
@@ -184,12 +213,23 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString(fmt.Sprintf("- 对话主题: %s\n", session.Topic))
 		sb.WriteString(fmt.Sprintf("- 发送者国家/地区: %s\n", getCountryName(sender.Country)))
 		sb.WriteString(fmt.Sprintf("- 当前分析对象: %s\n", analysisTarget))
-		sb.WriteString(fmt.Sprintf("- 接收者语言背景: %s\n\n", getCountryName(receiver.Country)))
+		sb.WriteString(fmt.Sprintf("- 接收者语言背景: %s\n", getCountryName(receiver.Country)))
+		sb.WriteString(fmt.Sprintf("- LLM角色档案: %s，%d岁，%s；文化背景: %s；母语/主要语言: %s；性格与个人弱点: %s；生活背景: %s\n\n",
+			roleProfile.NameZH,
+			roleProfile.Age,
+			roleProfile.GenderZH,
+			getCountryName(llmCountry),
+			llmNativeLang,
+			roleProfile.PersonalityZH,
+			roleProfile.BackgroundZH,
+		))
 
 		sb.WriteString("判定标准:\n")
 		sb.WriteString("- 只检测语用问题，不做普通语法、拼写、词汇或风格润色；只有这些问题改变礼貌、意图或关系处理时才标记。\n")
 		sb.WriteString("- 根据对话关系判断得体性：陌生人、师生、同事/商务关系通常需要更高礼貌度；朋友、同学关系可更自然直接。\n")
 		sb.WriteString("- 根据主题判断场景期待：学术、商务、旅行、文化交流和日常闲聊的表达规范不同。\n")
+		sb.WriteString("- 分析 LLM Bot 时，要把角色的年龄阶段、性格特征、个体缺点、文化背景和二语迁移作为解释指标：例如边界感弱、过度随意、含糊回避、抢话、过度道歉、用词直译等，都可能影响听者理解。\n")
+		sb.WriteString("- 不要把某个国家/文化的人都写成同一种性格；如果提到文化背景，必须说明它如何与具体角色、关系和场景共同作用。\n")
 		sb.WriteString("- 不要因为学习者表达不够地道就标记错误；只有可能造成冒犯、误解、请求/拒绝/感谢/道歉不当或关系失衡时才标记。\n")
 		sb.WriteString("- 只评价当前分析对象，不把历史消息中的问题归因到当前消息。\n")
 		sb.WriteString("- llm_l2 模式中，LLM Bot 会适当模拟二语学习者的语用问题；如果当前分析对象是 LLM Bot 回复，请识别其故意触发的语用失误。\n")
@@ -215,12 +255,23 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString(fmt.Sprintf("- Topic: %s\n", session.Topic))
 		sb.WriteString(fmt.Sprintf("- Sender country/region: %s\n", getCountryName(sender.Country)))
 		sb.WriteString(fmt.Sprintf("- Current analysis target: %s\n", analysisTarget))
-		sb.WriteString(fmt.Sprintf("- Receiver language background: %s\n\n", getCountryName(receiver.Country)))
+		sb.WriteString(fmt.Sprintf("- Receiver language background: %s\n", getCountryName(receiver.Country)))
+		sb.WriteString(fmt.Sprintf("- LLM role profile: %s, age %d, %s; cultural background: %s; native/main language: %s; personality and individual flaws: %s; life background: %s\n\n",
+			roleProfile.NameEN,
+			roleProfile.Age,
+			roleProfile.GenderEN,
+			getCountryName(llmCountry),
+			llmNativeLang,
+			roleProfile.PersonalityEN,
+			roleProfile.BackgroundEN,
+		))
 
 		sb.WriteString("Evaluation rules:\n")
 		sb.WriteString("- Detect pragmatic failures only, not ordinary grammar, spelling, vocabulary, or style issues unless they change politeness, intent, or relationship management.\n")
 		sb.WriteString("- Judge appropriateness by relationship: strangers, teacher-student, colleague/business contexts usually require more politeness; friends and classmates can be more direct.\n")
 		sb.WriteString("- Judge by topic: academic, business, travel, cultural exchange, and daily chat contexts have different expectations.\n")
+		sb.WriteString("- When analyzing the LLM Bot, use the role's age group, personality, individual flaws, cultural background, and L2 transfer as explanation factors: weak boundaries, excessive casualness, vague avoidance, interruption, over-apology, literal word choice, and similar traits may affect listener interpretation.\n")
+		sb.WriteString("- Do not stereotype a whole country or culture. If cultural background is mentioned, explain how it interacts with this specific role, relationship, and situation.\n")
 		sb.WriteString("- Do not flag a message merely because it is non-native or not idiomatic; flag only likely offense, misunderstanding, inappropriate requests/refusals/thanks/apologies, or relationship mismatch.\n")
 		sb.WriteString("- Evaluate only the current analysis target; do not attribute issues in previous messages to the current message.\n")
 		sb.WriteString("- In llm_l2 mode, the LLM bot may appropriately simulate L2 pragmatic problems; if the current analysis target is an LLM Bot reply, identify the intentionally triggered pragmatic failure.\n")
@@ -245,7 +296,7 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		for i := len(history) - 1; i >= 0; i-- {
 			msg := history[i]
 			var senderName string
-			if msg.Role == "user" || msg.Sender.ID == sender.ID {
+			if msg.Role == "user" || (msg.Role == "" && msg.Sender.Role != RoleBot) {
 				if isChineseMsg {
 					senderName = "用户"
 				} else {
@@ -467,8 +518,17 @@ func newDashScopeTextMessage(role string, content string) DashScopeMessage {
 	}
 }
 
-// makeDashScopeRequest 发起 DashScope 原生 HTTP 请求 (可复用)
+// makeDashScopeRequest 发起非流式 DashScope 原生 HTTP 请求（可复用）。
 func makeDashScopeRequest(apiKey string, reqBody DashScopeRequest) (*DashScopeResponse, error) {
+	return makeDashScopeHTTPRequest(apiKey, reqBody, false, 30*time.Second)
+}
+
+// makeDashScopeStreamingRequest 发起 SSE 流式请求。多模态模型的联网搜索必须使用此模式。
+func makeDashScopeStreamingRequest(apiKey string, reqBody DashScopeRequest) (*DashScopeResponse, error) {
+	return makeDashScopeHTTPRequest(apiKey, reqBody, true, 45*time.Second)
+}
+
+func makeDashScopeHTTPRequest(apiKey string, reqBody DashScopeRequest, streaming bool, timeout time.Duration) (*DashScopeResponse, error) {
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("JSON 序列化失败: %v", err)
@@ -481,21 +541,31 @@ func makeDashScopeRequest(apiKey string, reqBody DashScopeRequest) (*DashScopeRe
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if streaming {
+		req.Header.Set("X-DashScope-SSE", "enable")
+	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("API 请求失败: %v", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if readErr != nil {
+			return nil, fmt.Errorf("API 返回错误 %d，且读取错误内容失败: %v", resp.StatusCode, readErr)
+		}
+		return nil, fmt.Errorf("API 返回错误 %d: %s", resp.StatusCode, string(body))
+	}
+	if streaming {
+		return parseDashScopeSSE(resp.Body)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API 返回错误 %d: %s", resp.StatusCode, string(body))
 	}
 
 	var dashResp DashScopeResponse
@@ -507,6 +577,65 @@ func makeDashScopeRequest(apiKey string, reqBody DashScopeRequest) (*DashScopeRe
 	}
 
 	return &dashResp, nil
+}
+
+// parseDashScopeSSE 将 incremental_output 模式下的增量内容合并为普通响应，
+// 从而让上层生成逻辑无需同时维护两套响应处理代码。
+func parseDashScopeSSE(reader io.Reader) (*DashScopeResponse, error) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
+
+	var merged DashScopeResponse
+	var textBuilder strings.Builder
+	seenEvent := false
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+
+		var event DashScopeResponse
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
+			return nil, fmt.Errorf("解析 SSE 响应失败: %w", err)
+		}
+		seenEvent = true
+		if event.StatusCode != 0 && event.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("API 返回错误 %d: %s %s", event.StatusCode, event.Code, event.Message)
+		}
+		if event.Code != "" {
+			return nil, fmt.Errorf("API 返回错误: %s %s", event.Code, event.Message)
+		}
+
+		textBuilder.WriteString(getDashScopeResponseText(&event))
+		if event.RequestID != "" {
+			merged.RequestID = event.RequestID
+		}
+		if len(event.Output.SearchInfo.SearchResults) > 0 {
+			merged.Output.SearchInfo.SearchResults = event.Output.SearchInfo.SearchResults
+		}
+		if event.Output.FinishReason != "" {
+			merged.Output.FinishReason = event.Output.FinishReason
+		}
+		if len(event.Output.Choices) > 0 && event.Output.Choices[0].FinishReason != "" {
+			merged.Output.FinishReason = event.Output.Choices[0].FinishReason
+		}
+		if event.Usage.TotalTokens > 0 {
+			merged.Usage = event.Usage
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("读取 SSE 响应失败: %w", err)
+	}
+	if !seenEvent {
+		return nil, fmt.Errorf("SSE 响应中没有有效事件")
+	}
+
+	merged.Output.Text = textBuilder.String()
+	return &merged, nil
 }
 
 func getDashScopeResponseText(resp *DashScopeResponse) string {
@@ -580,7 +709,7 @@ func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
 	// 提取响应文本
 	responseText := getDashScopeResponseText(dashResp)
 	if strings.TrimSpace(responseText) == "" {
-		return &GrammarCheckResponse{HasError: false}, nil
+		return nil, fmt.Errorf("empty pragmatic check response")
 	}
 
 	// 提取 JSON
@@ -590,7 +719,7 @@ func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
 	var result GrammarCheckResponse
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
 		log.Printf("JSON parse error: %v, raw: %s", err, jsonStr)
-		return &GrammarCheckResponse{HasError: false}, nil
+		return nil, fmt.Errorf("parse pragmatic check response: %w", err)
 	}
 
 	// 如果 LLM 返回了新格式但 has_error 未正确设置, 根据 overall_evaluation 修正
@@ -680,6 +809,14 @@ func getCountryName(countryCode string) string {
 		"DE":    "德国(Germany)",
 		"CA":    "加拿大(Canada)",
 		"AU":    "澳大利亚(Australia)",
+		"NG":    "尼日利亚(Nigeria)",
+		"BR":    "巴西(Brazil)",
+		"ZA":    "南非(South Africa)",
+		"IN":    "印度(India)",
+		"MX":    "墨西哥(Mexico)",
+		"MN":    "蒙古(Mongolia)",
+		"MY":    "马来西亚(Malaysia)",
+		"SG":    "新加坡(Singapore)",
 		"OTHER": "其他(Other)",
 	}
 	if name, ok := countryMap[countryCode]; ok {

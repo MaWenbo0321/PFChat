@@ -16,7 +16,7 @@
               <el-input
                   v-model="loginForm.username"
                   :placeholder="$t('login.username')"
-                  prefix-icon="User"
+                  :prefix-icon="User"
                   size="large"
               />
             </el-form-item>
@@ -25,7 +25,7 @@
                   v-model="loginForm.password"
                   type="password"
                   :placeholder="$t('login.password')"
-                  prefix-icon="Lock"
+                  :prefix-icon="Lock"
                   size="large"
                   show-password
                   @keyup.enter="handleLogin"
@@ -50,7 +50,7 @@
               <el-input
                   v-model="registerForm.username"
                   :placeholder="$t('login.usernamePlaceholder')"
-                  prefix-icon="User"
+                  :prefix-icon="User"
                   size="large"
               />
             </el-form-item>
@@ -59,7 +59,7 @@
                   v-model="registerForm.password"
                   type="password"
                   :placeholder="$t('login.passwordPlaceholder')"
-                  prefix-icon="Lock"
+                  :prefix-icon="Lock"
                   size="large"
                   show-password
               />
@@ -111,14 +111,16 @@ import { ref, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Warning } from '@element-plus/icons-vue'
+import { Warning, User, Lock } from '@element-plus/icons-vue'
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+import { useSessionStore } from '@/stores/session'
 import { getLocaleByCountry } from '@/utils/locale'
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
+const sessionStore = useSessionStore()
 const { t, locale } = useI18n()
 
 const activeTab = ref('login')
@@ -170,6 +172,7 @@ const handleLogin = async () => {
     loading.value = true
 
     const response = await api.login(loginForm)
+    sessionStore.clearSession()
     userStore.setToken(response.token)
     userStore.setUserInfo(response.user)
 
@@ -216,6 +219,7 @@ const handleRegister = async () => {
     loading.value = true
     const response = await api.register(registerForm)
 
+    sessionStore.clearSession()
     userStore.setToken(response.token)
     userStore.setUserInfo(response.user)
 

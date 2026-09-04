@@ -27,50 +27,11 @@ export function getLocaleByCountry(countryCode) {
 
 /**
  * 切换应用语言
- * @param {string} locale - 语言代码
+ * @param {string} newLocale - 语言代码
+ * @param {{ value: string }} localeRef - vue-i18n 的响应式 locale
  */
-export function switchLocale(locale, i18n) {
-    i18n.global.locale.value = locale
-    localStorage.setItem('locale', locale)
-
-    // 同时切换 Element Plus 的语言
-    // 注意：需要在 main.js 中配置 Element Plus 的国际化
-}
-
-/**
- * 根据国家代码自动切换语言
- * @param {string} countryCode - 国家代码
- * @param {object} i18n - i18n 实例
- */
-export function autoSwitchLocaleByCountry(countryCode, i18n) {
-    const locale = getLocaleByCountry(countryCode)
-    switchLocale(locale, i18n)
-    return locale
-}
-
-/**
- * 获取当前语言
- * @param {object} i18n - i18n 实例
- * @returns {string} 当前语言代码
- */
-export function getCurrentLocale(i18n) {
-    return i18n.global.locale.value
-}
-
-/**
- * 判断当前是否为中文
- * @param {object} i18n - i18n 实例
- * @returns {boolean}
- */
-export function isChinese(i18n) {
-    return i18n.global.locale.value === 'zh-CN'
-}
-
-/**
- * 判断当前是否为英文
- * @param {object} i18n - i18n 实例
- * @returns {boolean}
- */
-export function isEnglish(i18n) {
-    return i18n.global.locale.value === 'en-US'
+export function switchLocale(newLocale, localeRef) {
+    localeRef.value = newLocale
+    localStorage.setItem('locale', newLocale)
+    document.documentElement.lang = newLocale
 }

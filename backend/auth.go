@@ -1,13 +1,17 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 var jwtSecret = []byte("your-secret-key-change-in-production")
@@ -26,11 +30,26 @@ func register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	req.Username = strings.TrimSpace(req.Username)
+	req.Country = strings.ToUpper(strings.TrimSpace(req.Country))
+	if utf8.RuneCountInString(req.Username) < 2 || utf8.RuneCountInString(req.Username) > 20 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "用户名长度必须为2到20个字符"})
+		return
+	}
+	if !isValidUserCountry(req.Country) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的国家或地区"})
+		return
+	}
 
 	// 检查用户名是否已存在
 	var existUser User
-	if err := db.Where("username = ?", req.Username).First(&existUser).Error; err == nil {
+	err := db.Where("username = ?", req.Username).First(&existUser).Error
+	if err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "用户名已存在"})
+		return
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "检查用户名失败"})
 		return
 	}
 
@@ -67,6 +86,16 @@ func register(c *gin.Context) {
 	})
 }
 
+func isValidUserCountry(country string) bool {
+	switch strings.ToUpper(strings.TrimSpace(country)) {
+	case "CN", "TW", "HK", "SG", "MY", "JP", "KR", "MN", "FR", "DE",
+		"US", "GB", "CA", "AU", "NZ", "NG", "BR", "ZA", "IN", "MX", "OTHER":
+		return true
+	default:
+		return false
+	}
+}
+
 // 登录
 func login(c *gin.Context) {
 	var req LoginRequest
@@ -74,6 +103,7 @@ func login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	req.Username = strings.TrimSpace(req.Username)
 
 	// 查找用户
 	var user User
@@ -141,30 +171,42 @@ func authMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 解析 token
-		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-			return jwtSecret, nil
-		})
-
-		if err != nil || !token.Valid {
+		claims, err := parseTokenClaims(tokenString)
+		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "token无效或已过期"})
 			c.Abort()
 			return
 		}
 
-		claims, ok := token.Claims.(*Claims)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "token解析失败"})
+		// Token 中的角色可能在签发后已被管理员修改，用户也可能已被删除。
+		// 每次请求以数据库中的当前状态为准，避免旧 Token 保留过期权限。
+		var user User
+		if err := db.First(&user, claims.UserID).Error; err != nil || user.Role == RoleBot {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "用户不存在或不可登录"})
 			c.Abort()
 			return
 		}
 
 		// 将用户信息存入上下文
-		c.Set("userID", claims.UserID)
-		c.Set("username", claims.Username)
-		c.Set("role", claims.Role)
+		c.Set("userID", user.ID)
+		c.Set("username", user.Username)
+		c.Set("role", user.Role)
 		c.Next()
 	}
+}
+
+func parseTokenClaims(tokenString string) (*Claims, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		claims,
+		func(token *jwt.Token) (interface{}, error) { return jwtSecret, nil },
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
+	if err != nil || !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+	return claims, nil
 }
 
 // 管理员权限中间件
@@ -177,7 +219,8 @@ func adminMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if role.(string) != RoleAdmin {
+		roleName, ok := role.(string)
+		if !ok || roleName != RoleAdmin {
 			c.JSON(http.StatusForbidden, gin.H{"error": "需要管理员权限"})
 			c.Abort()
 			return
@@ -189,6 +232,10 @@ func adminMiddleware() gin.HandlerFunc {
 
 // 获取当前用户ID
 func getCurrentUserID(c *gin.Context) uint {
-	userID, _ := c.Get("userID")
-	return userID.(uint)
+	userID, ok := c.Get("userID")
+	if !ok {
+		return 0
+	}
+	id, _ := userID.(uint)
+	return id
 }

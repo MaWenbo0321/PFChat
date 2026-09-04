@@ -38,9 +38,7 @@ const currentLocaleName = computed(() => {
 })
 
 const handleCommand = (command) => {
-  switchLocale(command, { global: { locale: { value: locale.value } } })
-  // 刷新页面以应用新语言
-  window.location.reload()
+  switchLocale(command, locale)
 }
 </script>
 

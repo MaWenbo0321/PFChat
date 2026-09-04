@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -66,8 +65,9 @@ func (h *Hub) run() {
 				delete(h.clients, client.userID)
 			}
 			h.clients[client.userID] = client
+			clientCount := len(h.clients)
 			h.mu.Unlock()
-			log.Printf("User %d connected, total clients: %d", client.userID, len(h.clients))
+			log.Printf("User %d connected, total clients: %d", client.userID, clientCount)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -84,9 +84,7 @@ func (h *Hub) run() {
 		case message := <-h.broadcast:
 			h.mu.RLock()
 			for _, client := range h.clients {
-				select {
-				case client.send <- message:
-				default:
+				if !client.trySend(message) {
 					go func(c *Client) {
 						h.unregister <- c
 					}(client)
@@ -94,6 +92,22 @@ func (h *Hub) run() {
 			}
 			h.mu.RUnlock()
 		}
+	}
+}
+
+// trySend 将“检查是否关闭”和“写入 channel”放在同一把锁下，
+// 防止连接关闭时并发发送触发 send on closed channel。
+func (c *Client) trySend(message []byte) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.isClosed {
+		return false
+	}
+	select {
+	case c.send <- message:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -114,10 +128,9 @@ func (h *Hub) sendToUser(userID uint, message []byte) {
 	h.mu.RUnlock()
 
 	if ok {
-		select {
-		case client.send <- message:
+		if client.trySend(message) {
 			log.Printf("Message sent to user %d", userID)
-		default:
+		} else {
 			log.Printf("Failed to send message to user %d, channel full", userID)
 			go func() {
 				h.unregister <- client
@@ -138,13 +151,14 @@ func serveWs(hub *Hub, c *gin.Context) {
 	}
 
 	// 验证 token
-	claims := &Claims{}
-	parsedToken, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
-	})
-
-	if err != nil || !parsedToken.Valid {
+	claims, err := parseTokenClaims(token)
+	if err != nil {
 		c.JSON(401, gin.H{"error": "token无效"})
+		return
+	}
+	var user User
+	if err := db.First(&user, claims.UserID).Error; err != nil || user.Role == RoleBot {
+		c.JSON(401, gin.H{"error": "用户不存在或不可登录"})
 		return
 	}
 
@@ -194,7 +208,7 @@ func (c *Client) readPump() {
 		}
 
 		// 处理接收到的消息
-		go c.handleMessage(message)
+		c.handleMessage(message)
 	}
 }
 

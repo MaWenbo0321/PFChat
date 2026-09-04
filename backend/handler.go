@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // ============================================================================
@@ -75,6 +77,10 @@ func getGrammarErrors(c *gin.Context) {
 
 	// 按错误类型筛选
 	if req.ErrorType != "" && req.ErrorType != "all" {
+		if !IsValidErrorType(req.ErrorType) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的错误类型"})
+			return
+		}
 		query = query.Where("error_type = ?", req.ErrorType)
 	}
 
@@ -86,7 +92,11 @@ func getGrammarErrors(c *gin.Context) {
 	}
 
 	// 获取统计信息
-	statistics := getGrammarErrorStatistics(userID)
+	statistics, err := getGrammarErrorStatistics(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取错误统计失败"})
+		return
+	}
 
 	c.JSON(http.StatusOK, GetGrammarErrorsResponse{
 		Errors:     errors,
@@ -95,11 +105,13 @@ func getGrammarErrors(c *gin.Context) {
 }
 
 // 获取语法错误统计信息
-func getGrammarErrorStatistics(userID uint) GrammarErrorStatistics {
+func getGrammarErrorStatistics(userID uint) (GrammarErrorStatistics, error) {
 	var statistics GrammarErrorStatistics
 
 	// 总数
-	db.Model(&GrammarError{}).Where("user_id = ?", userID).Count(&statistics.Total)
+	if err := db.Model(&GrammarError{}).Where("user_id = ?", userID).Count(&statistics.Total).Error; err != nil {
+		return statistics, err
+	}
 
 	// 按类型统计
 	statistics.ByType = make(map[string]int)
@@ -107,27 +119,33 @@ func getGrammarErrorStatistics(userID uint) GrammarErrorStatistics {
 		ErrorType string
 		Count     int
 	}
-	db.Model(&GrammarError{}).
+	if err := db.Model(&GrammarError{}).
 		Select("error_type, COUNT(*) as count").
 		Where("user_id = ?", userID).
 		Group("error_type").
-		Scan(&typeStats)
+		Scan(&typeStats).Error; err != nil {
+		return statistics, err
+	}
 
 	for _, stat := range typeStats {
 		statistics.ByType[stat.ErrorType] = stat.Count
 	}
 
 	// 今日错误数
-	db.Model(&GrammarError{}).
+	if err := db.Model(&GrammarError{}).
 		Where("user_id = ? AND DATE(created_at) = CURDATE()", userID).
-		Count(&statistics.TodayCount)
+		Count(&statistics.TodayCount).Error; err != nil {
+		return statistics, err
+	}
 
 	// 本周错误数
-	db.Model(&GrammarError{}).
+	if err := db.Model(&GrammarError{}).
 		Where("user_id = ? AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)", userID).
-		Count(&statistics.WeekCount)
+		Count(&statistics.WeekCount).Error; err != nil {
+		return statistics, err
+	}
 
-	return statistics
+	return statistics, nil
 }
 
 // 删除语法错误记录
@@ -194,6 +212,10 @@ func clearGrammarErrorsByType(c *gin.Context) {
 			"deleted_count": result.RowsAffected,
 		})
 	} else {
+		if !IsValidErrorType(errorType) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的错误类型"})
+			return
+		}
 		// 清空指定类型的记录
 		result := db.Where("user_id = ? AND error_type = ?", userID, errorType).Delete(&GrammarError{})
 		if result.Error != nil {
@@ -249,7 +271,7 @@ func updateGrammarErrorType(c *gin.Context) {
 // 获取所有用户（管理员专用）
 func getAllUsersForAdmin(c *gin.Context) {
 	var users []User
-	if err := db.Find(&users).Error; err != nil {
+	if err := db.Where("role <> ?", RoleBot).Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户列表失败"})
 		return
 	}
@@ -265,14 +287,15 @@ func deleteUser(c *gin.Context) {
 	userID := c.Param("id")
 	currentUserID := getCurrentUserID(c)
 
-	id, err := strconv.Atoi(userID)
-	if err != nil {
+	id64, err := strconv.ParseUint(userID, 10, 64)
+	if err != nil || id64 == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的用户ID"})
 		return
 	}
+	id := uint(id64)
 
 	// 不能删除自己
-	if uint(id) == currentUserID {
+	if id == currentUserID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "不能删除自己"})
 		return
 	}
@@ -283,33 +306,31 @@ func deleteUser(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
 		return
 	}
+	if user.Role == RoleBot {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不能删除系统 Bot 用户"})
+		return
+	}
 
 	// 使用事务删除用户及相关数据
-	tx := db.Begin()
-
-	// 删除用户发送和接收的所有消息
-	if err := tx.Where("sender_id = ? OR receiver_id = ?", id, id).Delete(&Message{}).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除用户消息失败"})
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", id).Delete(&GrammarError{}).Error; err != nil {
+			return fmt.Errorf("删除用户语法记录: %w", err)
+		}
+		if err := tx.Where("sender_id = ? OR receiver_id = ?", id, id).Delete(&Message{}).Error; err != nil {
+			return fmt.Errorf("删除用户消息: %w", err)
+		}
+		if err := tx.Where("user_id = ?", id).Delete(&ConversationSession{}).Error; err != nil {
+			return fmt.Errorf("删除用户会话: %w", err)
+		}
+		// 用户关联数据已硬删除；用户本身也应硬删除，避免保留密码哈希并永久占用唯一用户名。
+		if err := tx.Unscoped().Delete(&user).Error; err != nil {
+			return fmt.Errorf("删除用户: %w", err)
+		}
+		return nil
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除用户及关联数据失败"})
 		return
 	}
-
-	// 删除用户相关的语法错误记录
-	if err := tx.Where("user_id = ?", id).Delete(&GrammarError{}).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除用户语法记录失败"})
-		return
-	}
-
-	// 删除用户
-	if err := tx.Delete(&user).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除用户失败"})
-		return
-	}
-
-	// 提交事务
-	tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "用户删除成功",
@@ -325,14 +346,15 @@ func updateUserRole(c *gin.Context) {
 	userID := c.Param("id")
 	currentUserID := getCurrentUserID(c)
 
-	id, err := strconv.Atoi(userID)
-	if err != nil {
+	id64, err := strconv.ParseUint(userID, 10, 64)
+	if err != nil || id64 == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的用户ID"})
 		return
 	}
+	id := uint(id64)
 
 	// 不能修改自己的角色
-	if uint(id) == currentUserID {
+	if id == currentUserID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "不能修改自己的角色"})
 		return
 	}
@@ -356,6 +378,10 @@ func updateUserRole(c *gin.Context) {
 	var user User
 	if err := db.First(&user, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+		return
+	}
+	if user.Role == RoleBot {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不能修改系统 Bot 用户角色"})
 		return
 	}
 
@@ -383,20 +409,19 @@ func getUserStats(c *gin.Context) {
 		TotalGrammarErrors int64 `json:"total_grammar_errors"`
 	}
 
-	// 统计用户总数
-	db.Model(&User{}).Count(&stats.TotalUsers)
-
-	// 统计管理员数量
-	db.Model(&User{}).Where("role = ?", RoleAdmin).Count(&stats.AdminUsers)
-
-	// 统计普通用户数量
-	db.Model(&User{}).Where("role = ?", RoleUser).Count(&stats.RegularUsers)
-
-	// 统计消息总数
-	db.Model(&Message{}).Count(&stats.TotalMessages)
-
-	// 统计语法错误总数
-	db.Model(&GrammarError{}).Count(&stats.TotalGrammarErrors)
+	queries := []*gorm.DB{
+		db.Model(&User{}).Where("role <> ?", RoleBot).Count(&stats.TotalUsers),
+		db.Model(&User{}).Where("role = ?", RoleAdmin).Count(&stats.AdminUsers),
+		db.Model(&User{}).Where("role = ?", RoleUser).Count(&stats.RegularUsers),
+		db.Model(&Message{}).Count(&stats.TotalMessages),
+		db.Model(&GrammarError{}).Count(&stats.TotalGrammarErrors),
+	}
+	for _, query := range queries {
+		if query.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "获取统计信息失败"})
+			return
+		}
+	}
 
 	c.JSON(http.StatusOK, stats)
 }

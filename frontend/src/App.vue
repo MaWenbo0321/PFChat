@@ -1,10 +1,19 @@
 <template>
-  <div id="app">
-    <router-view />
-  </div>
+  <el-config-provider :locale="elementLocale">
+    <div class="app-root">
+      <router-view />
+    </div>
+  </el-config-provider>
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import en from 'element-plus/dist/locale/en.mjs'
+
+const { locale } = useI18n()
+const elementLocale = computed(() => locale.value === 'zh-CN' ? zhCn : en)
 </script>
 
 <style>
@@ -14,7 +23,7 @@
   box-sizing: border-box;
 }
 
-#app {
+.app-root {
   width: 100vw;
   height: 100vh;
   overflow: hidden;

@@ -36,6 +36,29 @@
           </div>
         </el-form-item>
 
+        <!-- LLM角色 -->
+        <div class="section-title">{{ $t('setup.llmRoleTitle') }}</div>
+        <el-form-item prop="llm_role_id">
+          <div class="role-cards">
+            <div
+              v-for="role in availableRoles"
+              :key="role.id"
+              class="role-card"
+              :class="{ active: form.llm_role_id === role.id }"
+              @click="form.llm_role_id = role.id"
+            >
+              <div class="role-card-header">
+                <div>
+                  <div class="role-card-title">{{ role.name }}</div>
+                  <div class="role-card-meta">{{ role.age }} · {{ role.gender }} · {{ role.culture }}</div>
+                </div>
+                <el-tag size="small" effect="plain">{{ role.nativeLanguage }}</el-tag>
+              </div>
+              <div class="role-card-desc">{{ role.personality }}</div>
+            </div>
+          </div>
+        </el-form-item>
+
         <!-- 目标语言 -->
         <el-form-item :label="$t('setup.targetLanguage')" prop="target_language">
           <el-select v-model="form.target_language" :placeholder="$t('setup.selectLanguage')" size="large" class="full-width">
@@ -57,8 +80,19 @@
           </el-select>
         </el-form-item>
 
-        <!-- 会话模式 -->
-        <div class="section-title">{{ $t('setup.feedbackTitle') }}</div>
+        <!-- AI建议开关 -->
+        <div class="section-title">{{ $t('setup.aiSuggestionsTitle') }}</div>
+        <div class="ai-suggestions-switch">
+          <div>
+            <div class="ai-suggestions-label">{{ form.ai_suggestions_enabled ? $t('setup.aiSuggestionsOn') : $t('setup.aiSuggestionsOff') }}</div>
+            <div class="ai-suggestions-desc">{{ form.ai_suggestions_enabled ? $t('setup.aiSuggestionsOnDesc') : $t('setup.aiSuggestionsOffDesc') }}</div>
+          </div>
+          <el-switch v-model="form.ai_suggestions_enabled" size="large" :aria-label="$t('setup.aiSuggestionsTitle')" />
+        </div>
+
+        <!-- AI建议的展示方式 -->
+        <template v-if="form.ai_suggestions_enabled">
+        <div class="section-title feedback-method-title">{{ $t('setup.feedbackTitle') }}</div>
         <el-form-item prop="feedback_mode">
           <div class="feedback-cards">
             <div
@@ -81,6 +115,7 @@
             </div>
           </div>
         </el-form-item>
+        </template>
 
         <el-button
           type="primary"
@@ -99,7 +134,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -119,9 +154,11 @@ const formRef = ref(null)
 const form = ref({
   mode: 'user_l2',
   target_language: 'EN',
+  llm_role_id: 'aiko',
   relationship_type: '',
   topic: '',
-  feedback_mode: 'complete'
+  feedback_mode: 'complete',
+  ai_suggestions_enabled: true
 })
 
 const isZh = computed(() => locale.value === 'zh-CN')
@@ -151,15 +188,213 @@ const topics = computed(() => [
   { value: t('setup.topicCulture'), label: t('setup.topicCulture') },
 ])
 
+const roleProfiles = computed(() => [
+  {
+    id: 'aiko',
+    age: 24,
+    gender: t('setup.roleGenderFemale'),
+    country: 'JP',
+    nativeLanguage: getLanguageNameByCountry('JP'),
+    name: t('setup.roleAikoName'),
+    personality: t('setup.roleAikoDesc')
+  },
+  {
+    id: 'minji',
+    age: 20,
+    gender: t('setup.roleGenderFemale'),
+    country: 'KR',
+    nativeLanguage: getLanguageNameByCountry('KR'),
+    name: t('setup.roleMinjiName'),
+    personality: t('setup.roleMinjiDesc')
+  },
+  {
+    id: 'haruto',
+    age: 19,
+    gender: t('setup.roleGenderMale'),
+    country: 'JP',
+    nativeLanguage: getLanguageNameByCountry('JP'),
+    name: t('setup.roleHarutoName'),
+    personality: t('setup.roleHarutoDesc')
+  },
+  {
+    id: 'enkhjin',
+    age: 23,
+    gender: t('setup.roleGenderFemale'),
+    country: 'MN',
+    nativeLanguage: getLanguageNameByCountry('MN'),
+    name: t('setup.roleEnkhjinName'),
+    personality: t('setup.roleEnkhjinDesc')
+  },
+  {
+    id: 'xiayu',
+    age: 21,
+    gender: t('setup.roleGenderFemale'),
+    country: 'CN',
+    nativeLanguage: getLanguageNameByCountry('CN'),
+    name: t('setup.roleXiayuName'),
+    personality: t('setup.roleXiayuDesc')
+  },
+  {
+    id: 'nurul',
+    age: 25,
+    gender: t('setup.roleGenderFemale'),
+    country: 'MY',
+    nativeLanguage: getLanguageNameByCountry('MY'),
+    name: t('setup.roleNurulName'),
+    personality: t('setup.roleNurulDesc')
+  },
+  {
+    id: 'cheryl',
+    age: 28,
+    gender: t('setup.roleGenderFemale'),
+    country: 'SG',
+    nativeLanguage: getLanguageNameByCountry('SG'),
+    name: t('setup.roleCherylName'),
+    personality: t('setup.roleCherylDesc')
+  },
+  {
+    id: 'marcus',
+    age: 34,
+    gender: t('setup.roleGenderMale'),
+    country: 'DE',
+    nativeLanguage: getLanguageNameByCountry('DE'),
+    name: t('setup.roleMarcusName'),
+    personality: t('setup.roleMarcusDesc')
+  },
+  {
+    id: 'sofia',
+    age: 29,
+    gender: t('setup.roleGenderFemale'),
+    country: 'FR',
+    nativeLanguage: getLanguageNameByCountry('FR'),
+    name: t('setup.roleSofiaName'),
+    personality: t('setup.roleSofiaDesc')
+  },
+  {
+    id: 'daniel',
+    age: 42,
+    gender: t('setup.roleGenderMale'),
+    country: 'US',
+    nativeLanguage: getLanguageNameByCountry('US'),
+    name: t('setup.roleDanielName'),
+    personality: t('setup.roleDanielDesc')
+  },
+  {
+    id: 'amara',
+    age: 31,
+    gender: t('setup.roleGenderFemale'),
+    country: 'NG',
+    nativeLanguage: getLanguageNameByCountry('NG'),
+    name: t('setup.roleAmaraName'),
+    personality: t('setup.roleAmaraDesc')
+  },
+  {
+    id: 'joao',
+    age: 27,
+    gender: t('setup.roleGenderMale'),
+    country: 'BR',
+    nativeLanguage: getLanguageNameByCountry('BR'),
+    name: t('setup.roleJoaoName'),
+    personality: t('setup.roleJoaoDesc')
+  },
+  {
+    id: 'mia',
+    age: 38,
+    gender: t('setup.roleGenderFemale'),
+    country: 'AU',
+    nativeLanguage: getLanguageNameByCountry('AU'),
+    name: t('setup.roleMiaName'),
+    personality: t('setup.roleMiaDesc')
+  },
+  {
+    id: 'thabo',
+    age: 45,
+    gender: t('setup.roleGenderMale'),
+    country: 'ZA',
+    nativeLanguage: getLanguageNameByCountry('ZA'),
+    name: t('setup.roleThaboName'),
+    personality: t('setup.roleThaboDesc')
+  },
+  {
+    id: 'priya',
+    age: 33,
+    gender: t('setup.roleGenderFemale'),
+    country: 'IN',
+    nativeLanguage: getLanguageNameByCountry('IN'),
+    name: t('setup.rolePriyaName'),
+    personality: t('setup.rolePriyaDesc')
+  },
+  {
+    id: 'lucia',
+    age: 22,
+    gender: t('setup.roleGenderFemale'),
+    country: 'MX',
+    nativeLanguage: getLanguageNameByCountry('MX'),
+    name: t('setup.roleLuciaName'),
+    personality: t('setup.roleLuciaDesc')
+  }
+])
+
+const availableRoles = computed(() => {
+  const roles = roleProfiles.value.filter(role => {
+    if (form.value.mode !== 'llm_l2') return true
+    return role.country !== userStore.userInfo?.country &&
+      role.country !== targetLanguageToCountry(form.value.target_language)
+  })
+  return roles.map(role => ({
+    ...role,
+    culture: getCountryLabel(role.country)
+  }))
+})
+
 const rules = {
   mode: [{ required: true, message: t('setup.modeRequired') }],
   target_language: [{ required: true, message: t('setup.languageRequired'), trigger: 'change' }],
+  llm_role_id: [{ required: true, message: t('setup.llmRoleRequired'), trigger: 'change' }],
   relationship_type: [{ required: true, message: t('setup.relationshipRequired'), trigger: 'change' }],
   topic: [{ required: true, message: t('setup.topicRequired'), trigger: 'change' }],
   feedback_mode: [{ required: true, message: t('setup.feedbackRequired') }],
 }
 
+const getLanguageNameByCountry = (country) => {
+  const map = { CN: '中文', TW: '中文', HK: '中文', SG: 'English/Mandarin', MY: 'Malay/English/Chinese', JP: '日本語', KR: '한국어', MN: 'Mongolian', FR: 'Français', DE: 'Deutsch', US: 'English', GB: 'English', CA: 'English', AU: 'English', NG: 'English + local languages', BR: 'Português', ZA: 'English + local languages', IN: 'Hindi/English', MX: 'Español' }
+  return map[country] || 'English'
+}
+
+const getCountryLabel = (country) => {
+  return t(`countries.${country}`)
+}
+
+const targetLanguageToCountry = (lang) => {
+  const map = { EN: 'US', ZH: 'CN', JP: 'JP', KR: 'KR', FR: 'FR', DE: 'DE' }
+  return map[lang] || 'US'
+}
+
+watch(availableRoles, (roles) => {
+  if (roles.length === 0) return
+  if (!roles.some(role => role.id === form.value.llm_role_id)) {
+    form.value.llm_role_id = roles[0].id
+  }
+}, { immediate: true })
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    const data = await api.getActiveSession()
+    if (data.session) {
+      sessionStore.setSession(data.session)
+      sessionStore.setMessages([])
+      await router.replace('/chat')
+    }
+  } catch (error) {
+    console.error('Restore active session from setup error:', error)
+  } finally {
+    loading.value = false
+  }
+})
+
 const startConversation = async () => {
+  if (loading.value) return
   try {
     await formRef.value.validate()
     loading.value = true
@@ -185,6 +420,7 @@ const startConversation = async () => {
 
 const handleLogout = () => {
   userStore.logout()
+  sessionStore.clearSession()
   router.push('/login')
 }
 </script>
@@ -286,6 +522,96 @@ const handleLogout = () => {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   width: 100%;
+}
+
+.ai-suggestions-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid #dcdfe6;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.ai-suggestions-label {
+  color: #303133;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ai-suggestions-desc {
+  margin-top: 5px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.feedback-method-title {
+  margin-top: 0;
+}
+
+.role-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.role-card {
+  border: 2px solid #dcdfe6;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+
+.role-card:hover {
+  border-color: #409eff;
+  background: #f0f7ff;
+}
+
+.role-card.active {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.role-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.role-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.role-card-meta {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.role-card-desc {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.5;
+}
+
+@media (max-width: 560px) {
+  .role-cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 .feedback-card {

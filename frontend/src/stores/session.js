@@ -24,12 +24,19 @@ export const useSessionStore = defineStore('session', () => {
 
     const clearSession = () => {
         currentSession.value = null
+        botUser.value = null
         messages.value = []
     }
 
     const incrementRound = () => {
         if (currentSession.value) {
             currentSession.value.round_count = (currentSession.value.round_count || 0) + 1
+        }
+    }
+
+    const setRoundCount = (roundCount) => {
+        if (currentSession.value && Number.isInteger(roundCount) && roundCount >= 0) {
+            currentSession.value.round_count = roundCount
         }
     }
 
@@ -42,6 +49,7 @@ export const useSessionStore = defineStore('session', () => {
         setMessages,
         addMessage,
         clearSession,
-        incrementRound
+        incrementRound,
+        setRoundCount
     }
 })

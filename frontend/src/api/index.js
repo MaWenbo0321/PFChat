@@ -1,6 +1,13 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
+import { useUserStore } from '@/stores/user'
+import { useSessionStore } from '@/stores/session'
+
+const notifyError = (error, message) => {
+    ElMessage.error(message)
+    error.pfchatNotified = true
+}
 
 // 创建 axios 实例
 const instance = axios.create({
@@ -35,19 +42,25 @@ instance.interceptors.response.use(
             const { status, data } = error.response
 
             if (status === 401) {
-                ElMessage.error('登录已过期，请重新登录')
-                localStorage.removeItem('token')
-                localStorage.removeItem('userInfo')
-                router.push('/login')
+				const userStore = useUserStore()
+				const hadAuthenticatedSession = Boolean(userStore.token)
+				useSessionStore().clearSession()
+				if (hadAuthenticatedSession) {
+					userStore.logout()
+					notifyError(error, '登录已过期，请重新登录')
+					if (router.currentRoute.value.path !== '/login') router.push('/login')
+				} else {
+					notifyError(error, data.error || '登录失败')
+				}
             } else if (status === 403) {
-                ElMessage.error('权限不足')
+                notifyError(error, data.error || '权限不足')
             } else if (status === 500) {
-                ElMessage.error(data.error || '服务器错误')
+                notifyError(error, data.error || '服务器错误')
             } else {
-                ElMessage.error(data.error || '请求失败')
+                notifyError(error, data.error || '请求失败')
             }
         } else {
-            ElMessage.error('网络错误')
+            notifyError(error, '网络错误')
         }
         return Promise.reject(error)
     }
@@ -74,7 +87,8 @@ const api = {
     getSessionFeedback: (id) => instance.get(`/sessions/${id}/feedback`),
 
     // LLM 对话
-    sendLLMMessage: (data) => instance.post('/llm/message', data),
+    // 回复与逐轮语用检测可能需要两次模型调用。
+    sendLLMMessage: (data) => instance.post('/llm/message', data, { timeout: 120000 }),
 
     // Bot 信息
     getLLMBotInfo: () => instance.get('/bot/info'),
