@@ -80,7 +80,11 @@ const api = {
     getMessageErrors: (messageIds) => instance.post('/messages/errors', { message_ids: messageIds }),
 
     // 会话管理
-    createSession: (data) => instance.post('/sessions', data),
+    getPersonaCountries: (mode, targetLanguage) => instance.get('/persona/countries', {
+        params: { mode, target_language: targetLanguage }
+    }),
+    // 新会话会先生成并固化人物档案，超时需覆盖一次模型调用。
+    createSession: (data) => instance.post('/sessions', data, { timeout: 60000 }),
     getActiveSession: () => instance.get('/sessions/active'),
     endSession: (id) => instance.post(`/sessions/${id}/end`),
     getSessionMessages: (id) => instance.get(`/sessions/${id}/messages`),

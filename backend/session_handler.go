@@ -32,6 +32,7 @@ type CreateSessionRequest struct {
 	Mode                 string `json:"mode" binding:"required"`
 	TargetLanguage       string `json:"target_language" binding:"required"`
 	LLMRoleID            string `json:"llm_role_id"`
+	LLMCountry           string `json:"llm_country"`
 	FeedbackMode         string `json:"feedback_mode" binding:"required"`
 	AISuggestionsEnabled *bool  `json:"ai_suggestions_enabled"`
 }
@@ -58,6 +59,7 @@ func createSession(c *gin.Context) {
 	req.RelationshipType = strings.TrimSpace(req.RelationshipType)
 	req.Topic = strings.TrimSpace(req.Topic)
 	req.TargetLanguage = strings.ToUpper(strings.TrimSpace(req.TargetLanguage))
+	req.LLMCountry = strings.ToUpper(strings.TrimSpace(req.LLMCountry))
 	if req.RelationshipType == "" || utf8.RuneCountInString(req.RelationshipType) > 50 ||
 		req.Topic == "" || utf8.RuneCountInString(req.Topic) > 100 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "关系或主题为空，或长度超过限制"})
@@ -67,12 +69,38 @@ func createSession(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的目标语言"})
 		return
 	}
-	if strings.TrimSpace(req.LLMRoleID) != "" && !isValidLLMRoleID(req.LLMRoleID) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 LLM 角色"})
+	var sessionUser User
+	if err := db.Select("id", "country").First(&sessionUser, userID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "读取用户信息失败"})
 		return
 	}
-	req.LLMRoleID = normalizeLLMRoleID(req.LLMRoleID)
+	if req.LLMCountry != "" {
+		if !isPersonaCountryAllowed(req.Mode, req.TargetLanguage, sessionUser.Country, req.LLMCountry) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "对话对象国家与当前模式或目标语言不匹配"})
+			return
+		}
+		// 保留旧字段的默认值以兼容旧版客户端和历史查询；新会话以人物快照为准。
+		req.LLMRoleID = defaultLLMRoleID
+	} else {
+		if strings.TrimSpace(req.LLMRoleID) != "" && !isValidLLMRoleID(req.LLMRoleID) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 LLM 角色"})
+			return
+		}
+		req.LLMRoleID = normalizeLLMRoleID(req.LLMRoleID)
+	}
 	aiSuggestionsEnabled := resolveAISuggestionsEnabled(req.AISuggestionsEnabled)
+
+	var activeCount int64
+	if err := db.Model(&ConversationSession{}).
+		Where("user_id = ? AND is_active = ?", userID, true).
+		Count(&activeCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "检查活跃会话失败"})
+		return
+	}
+	if activeCount > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "已有未结束的会话，请先继续或结束该会话"})
+		return
+	}
 
 	// 获取 bot 用户
 	var botUser User
@@ -93,6 +121,20 @@ func createSession(c *gin.Context) {
 		AISuggestionsEnabled: aiSuggestionsEnabled,
 		RoundCount:           0,
 		IsActive:             true,
+	}
+	if req.LLMCountry != "" {
+		persona := generateConversationPersona(
+			req.LLMCountry,
+			req.Mode,
+			req.TargetLanguage,
+			req.RelationshipType,
+			req.Topic,
+		)
+		applyPersonaToSession(&session, persona)
+		if !hasCompleteGeneratedPersona(session) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "生成对话对象失败"})
+			return
+		}
 	}
 
 	if err := db.Transaction(func(tx *gorm.DB) error {

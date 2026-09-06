@@ -105,6 +105,17 @@ type ConversationSession struct {
 	Mode                 string    `json:"mode" gorm:"type:varchar(20)"` // ModeUserL2 or ModeLLML2
 	TargetLanguage       string    `json:"target_language" gorm:"type:varchar(10)"`
 	LLMRoleID            string    `json:"llm_role_id" gorm:"type:varchar(50);default:'aiko'"`
+	LLMCountry           string    `json:"llm_country" gorm:"type:varchar(10);index"`
+	LLMNativeLanguage    string    `json:"llm_native_language" gorm:"type:varchar(120)"`
+	LLMNameZH            string    `json:"llm_name_zh" gorm:"type:varchar(100)"`
+	LLMNameEN            string    `json:"llm_name_en" gorm:"type:varchar(120)"`
+	LLMAge               int       `json:"llm_age"`
+	LLMGenderZH          string    `json:"llm_gender_zh" gorm:"type:varchar(30)"`
+	LLMGenderEN          string    `json:"llm_gender_en" gorm:"type:varchar(30)"`
+	LLMPersonalityZH     string    `json:"llm_personality_zh" gorm:"type:text"`
+	LLMPersonalityEN     string    `json:"llm_personality_en" gorm:"type:text"`
+	LLMBackgroundZH      string    `json:"llm_background_zh" gorm:"type:text"`
+	LLMBackgroundEN      string    `json:"llm_background_en" gorm:"type:text"`
 	FeedbackMode         string    `json:"feedback_mode" gorm:"type:varchar(20)"` // FeedbackComplete or FeedbackRounds5
 	AISuggestionsEnabled bool      `json:"ai_suggestions_enabled" gorm:"default:true"`
 	RoundCount           int       `json:"round_count" gorm:"default:0"`

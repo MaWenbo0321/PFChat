@@ -110,6 +110,9 @@
               <p>{{ getWelcomeMessage() }}</p>
               <div class="welcome-tips">
                 <p>{{ $t('chat.aiCultureHint', { culture: llmPersonaInfo.culture, native: llmPersonaInfo.nativeLanguage }) }}</p>
+                <p v-if="llmPersonaInfo.generated">{{ $t('chat.aiPersonaMeta', { age: llmPersonaInfo.age, gender: llmPersonaInfo.gender }) }}</p>
+                <p v-if="llmPersonaInfo.personality">{{ $t('chat.aiPersonaPersonality', { personality: llmPersonaInfo.personality }) }}</p>
+                <p v-if="llmPersonaInfo.background">{{ $t('chat.aiPersonaBackground', { background: llmPersonaInfo.background }) }}</p>
                 <p v-if="!aiSuggestionsEnabled">{{ $t('chat.tipSuggestionsOff') }}</p>
                 <p v-else-if="sessionStore.currentSession?.feedback_mode === 'rounds_5'">{{ $t('chat.tipPerTurn') }}</p>
                 <p v-else-if="sessionStore.currentSession?.mode === 'user_l2'">{{ $t('chat.tipUserL2') }}</p>
@@ -310,7 +313,7 @@ import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 const router = useRouter()
 const userStore = useUserStore()
 const sessionStore = useSessionStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 // ===================== 基础状态 =====================
 const messageInput = ref('')
@@ -720,6 +723,20 @@ const llmPersonaInfo = computed(() => {
   const role = roleProfiles.value[session?.llm_role_id] || roleProfiles.value.aiko
   if (!session) {
     return { name: role.name, country: role.country, culture: getCountryLabel(role.country), nativeLanguage: getLanguageNameByCountry(role.country) }
+  }
+  if (session.llm_country && session.llm_name_zh && session.llm_name_en) {
+    const useChinese = locale.value === 'zh-CN'
+    return {
+      generated: true,
+      name: useChinese ? session.llm_name_zh : session.llm_name_en,
+      age: session.llm_age,
+      gender: useChinese ? session.llm_gender_zh : session.llm_gender_en,
+      country: session.llm_country,
+      culture: getCountryLabel(session.llm_country),
+      nativeLanguage: session.llm_native_language || getLanguageNameByCountry(session.llm_country),
+      personality: useChinese ? session.llm_personality_zh : session.llm_personality_en,
+      background: useChinese ? session.llm_background_zh : session.llm_background_en
+    }
   }
   const country = session.mode === 'user_l2'
     ? role.country

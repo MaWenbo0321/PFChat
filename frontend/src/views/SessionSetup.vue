@@ -36,34 +36,33 @@
           </div>
         </el-form-item>
 
-        <!-- LLM角色 -->
-        <div class="section-title">{{ $t('setup.llmRoleTitle') }}</div>
-        <el-form-item prop="llm_role_id">
-          <div class="role-cards">
-            <div
-              v-for="role in availableRoles"
-              :key="role.id"
-              class="role-card"
-              :class="{ active: form.llm_role_id === role.id }"
-              @click="form.llm_role_id = role.id"
-            >
-              <div class="role-card-header">
-                <div>
-                  <div class="role-card-title">{{ role.name }}</div>
-                  <div class="role-card-meta">{{ role.age }} · {{ role.gender }} · {{ role.culture }}</div>
-                </div>
-                <el-tag size="small" effect="plain">{{ role.nativeLanguage }}</el-tag>
-              </div>
-              <div class="role-card-desc">{{ role.personality }}</div>
-            </div>
-          </div>
-        </el-form-item>
-
         <!-- 目标语言 -->
         <el-form-item :label="$t('setup.targetLanguage')" prop="target_language">
           <el-select v-model="form.target_language" :placeholder="$t('setup.selectLanguage')" size="large" class="full-width">
             <el-option v-for="lang in languages" :key="lang.value" :label="lang.label" :value="lang.value" />
           </el-select>
+        </el-form-item>
+
+        <!-- 对话对象国家/地区；人物档案在创建会话时由后端生成并固化。 -->
+        <el-form-item :label="$t('setup.personaCountry')" prop="llm_country">
+          <el-select
+            v-model="form.llm_country"
+            :placeholder="$t('setup.selectPersonaCountry')"
+            :loading="personaCountriesLoading"
+            size="large"
+            class="full-width"
+          >
+            <el-option
+              v-for="country in personaCountries"
+              :key="country.code"
+              :label="`${isZh ? country.name_zh : country.name_en} · ${country.native_language}`"
+              :value="country.code"
+            />
+          </el-select>
+          <div class="persona-hint">
+            {{ form.mode === 'user_l2' ? $t('setup.personaCountryUserL2Hint') : $t('setup.personaCountryLLML2Hint') }}
+          </div>
+          <div class="persona-hint">{{ $t('setup.randomPersonaHint') }}</div>
         </el-form-item>
 
         <!-- 关系类型 -->
@@ -150,11 +149,14 @@ const sessionStore = useSessionStore()
 const { t, locale } = useI18n()
 const loading = ref(false)
 const formRef = ref(null)
+const personaCountries = ref([])
+const personaCountriesLoading = ref(false)
+let personaCountriesRequest = 0
 
 const form = ref({
   mode: 'user_l2',
   target_language: 'EN',
-  llm_role_id: 'aiko',
+  llm_country: '',
   relationship_type: '',
   topic: '',
   feedback_mode: 'complete',
@@ -188,194 +190,41 @@ const topics = computed(() => [
   { value: t('setup.topicCulture'), label: t('setup.topicCulture') },
 ])
 
-const roleProfiles = computed(() => [
-  {
-    id: 'aiko',
-    age: 24,
-    gender: t('setup.roleGenderFemale'),
-    country: 'JP',
-    nativeLanguage: getLanguageNameByCountry('JP'),
-    name: t('setup.roleAikoName'),
-    personality: t('setup.roleAikoDesc')
-  },
-  {
-    id: 'minji',
-    age: 20,
-    gender: t('setup.roleGenderFemale'),
-    country: 'KR',
-    nativeLanguage: getLanguageNameByCountry('KR'),
-    name: t('setup.roleMinjiName'),
-    personality: t('setup.roleMinjiDesc')
-  },
-  {
-    id: 'haruto',
-    age: 19,
-    gender: t('setup.roleGenderMale'),
-    country: 'JP',
-    nativeLanguage: getLanguageNameByCountry('JP'),
-    name: t('setup.roleHarutoName'),
-    personality: t('setup.roleHarutoDesc')
-  },
-  {
-    id: 'enkhjin',
-    age: 23,
-    gender: t('setup.roleGenderFemale'),
-    country: 'MN',
-    nativeLanguage: getLanguageNameByCountry('MN'),
-    name: t('setup.roleEnkhjinName'),
-    personality: t('setup.roleEnkhjinDesc')
-  },
-  {
-    id: 'xiayu',
-    age: 21,
-    gender: t('setup.roleGenderFemale'),
-    country: 'CN',
-    nativeLanguage: getLanguageNameByCountry('CN'),
-    name: t('setup.roleXiayuName'),
-    personality: t('setup.roleXiayuDesc')
-  },
-  {
-    id: 'nurul',
-    age: 25,
-    gender: t('setup.roleGenderFemale'),
-    country: 'MY',
-    nativeLanguage: getLanguageNameByCountry('MY'),
-    name: t('setup.roleNurulName'),
-    personality: t('setup.roleNurulDesc')
-  },
-  {
-    id: 'cheryl',
-    age: 28,
-    gender: t('setup.roleGenderFemale'),
-    country: 'SG',
-    nativeLanguage: getLanguageNameByCountry('SG'),
-    name: t('setup.roleCherylName'),
-    personality: t('setup.roleCherylDesc')
-  },
-  {
-    id: 'marcus',
-    age: 34,
-    gender: t('setup.roleGenderMale'),
-    country: 'DE',
-    nativeLanguage: getLanguageNameByCountry('DE'),
-    name: t('setup.roleMarcusName'),
-    personality: t('setup.roleMarcusDesc')
-  },
-  {
-    id: 'sofia',
-    age: 29,
-    gender: t('setup.roleGenderFemale'),
-    country: 'FR',
-    nativeLanguage: getLanguageNameByCountry('FR'),
-    name: t('setup.roleSofiaName'),
-    personality: t('setup.roleSofiaDesc')
-  },
-  {
-    id: 'daniel',
-    age: 42,
-    gender: t('setup.roleGenderMale'),
-    country: 'US',
-    nativeLanguage: getLanguageNameByCountry('US'),
-    name: t('setup.roleDanielName'),
-    personality: t('setup.roleDanielDesc')
-  },
-  {
-    id: 'amara',
-    age: 31,
-    gender: t('setup.roleGenderFemale'),
-    country: 'NG',
-    nativeLanguage: getLanguageNameByCountry('NG'),
-    name: t('setup.roleAmaraName'),
-    personality: t('setup.roleAmaraDesc')
-  },
-  {
-    id: 'joao',
-    age: 27,
-    gender: t('setup.roleGenderMale'),
-    country: 'BR',
-    nativeLanguage: getLanguageNameByCountry('BR'),
-    name: t('setup.roleJoaoName'),
-    personality: t('setup.roleJoaoDesc')
-  },
-  {
-    id: 'mia',
-    age: 38,
-    gender: t('setup.roleGenderFemale'),
-    country: 'AU',
-    nativeLanguage: getLanguageNameByCountry('AU'),
-    name: t('setup.roleMiaName'),
-    personality: t('setup.roleMiaDesc')
-  },
-  {
-    id: 'thabo',
-    age: 45,
-    gender: t('setup.roleGenderMale'),
-    country: 'ZA',
-    nativeLanguage: getLanguageNameByCountry('ZA'),
-    name: t('setup.roleThaboName'),
-    personality: t('setup.roleThaboDesc')
-  },
-  {
-    id: 'priya',
-    age: 33,
-    gender: t('setup.roleGenderFemale'),
-    country: 'IN',
-    nativeLanguage: getLanguageNameByCountry('IN'),
-    name: t('setup.rolePriyaName'),
-    personality: t('setup.rolePriyaDesc')
-  },
-  {
-    id: 'lucia',
-    age: 22,
-    gender: t('setup.roleGenderFemale'),
-    country: 'MX',
-    nativeLanguage: getLanguageNameByCountry('MX'),
-    name: t('setup.roleLuciaName'),
-    personality: t('setup.roleLuciaDesc')
-  }
-])
-
-const availableRoles = computed(() => {
-  const roles = roleProfiles.value.filter(role => {
-    if (form.value.mode !== 'llm_l2') return true
-    return role.country !== userStore.userInfo?.country &&
-      role.country !== targetLanguageToCountry(form.value.target_language)
-  })
-  return roles.map(role => ({
-    ...role,
-    culture: getCountryLabel(role.country)
-  }))
-})
-
 const rules = {
   mode: [{ required: true, message: t('setup.modeRequired') }],
   target_language: [{ required: true, message: t('setup.languageRequired'), trigger: 'change' }],
-  llm_role_id: [{ required: true, message: t('setup.llmRoleRequired'), trigger: 'change' }],
+  llm_country: [{ required: true, message: t('setup.personaCountryRequired'), trigger: 'change' }],
   relationship_type: [{ required: true, message: t('setup.relationshipRequired'), trigger: 'change' }],
   topic: [{ required: true, message: t('setup.topicRequired'), trigger: 'change' }],
   feedback_mode: [{ required: true, message: t('setup.feedbackRequired') }],
 }
 
-const getLanguageNameByCountry = (country) => {
-  const map = { CN: '中文', TW: '中文', HK: '中文', SG: 'English/Mandarin', MY: 'Malay/English/Chinese', JP: '日本語', KR: '한국어', MN: 'Mongolian', FR: 'Français', DE: 'Deutsch', US: 'English', GB: 'English', CA: 'English', AU: 'English', NG: 'English + local languages', BR: 'Português', ZA: 'English + local languages', IN: 'Hindi/English', MX: 'Español' }
-  return map[country] || 'English'
-}
-
-const getCountryLabel = (country) => {
-  return t(`countries.${country}`)
-}
-
-const targetLanguageToCountry = (lang) => {
-  const map = { EN: 'US', ZH: 'CN', JP: 'JP', KR: 'KR', FR: 'FR', DE: 'DE' }
-  return map[lang] || 'US'
-}
-
-watch(availableRoles, (roles) => {
-  if (roles.length === 0) return
-  if (!roles.some(role => role.id === form.value.llm_role_id)) {
-    form.value.llm_role_id = roles[0].id
+const refreshPersonaCountries = async () => {
+  const requestId = ++personaCountriesRequest
+  personaCountriesLoading.value = true
+  try {
+    const data = await api.getPersonaCountries(form.value.mode, form.value.target_language)
+    if (requestId !== personaCountriesRequest) return
+    const countries = Array.isArray(data.countries) ? data.countries : []
+    personaCountries.value = countries
+    if (!countries.some(country => country.code === form.value.llm_country)) {
+      form.value.llm_country = countries[0]?.code || ''
+    }
+  } catch (error) {
+    if (requestId !== personaCountriesRequest) return
+    personaCountries.value = []
+    form.value.llm_country = ''
+    if (!error?.pfchatNotified) ElMessage.error(t('setup.personaCountriesLoadFailed'))
+  } finally {
+    if (requestId === personaCountriesRequest) personaCountriesLoading.value = false
   }
-}, { immediate: true })
+}
+
+watch(
+  () => [form.value.mode, form.value.target_language],
+  refreshPersonaCountries,
+  { immediate: true }
+)
 
 onMounted(async () => {
   loading.value = true
@@ -648,6 +497,14 @@ const handleLogout = () => {
 
 .full-width {
   width: 100%;
+}
+
+.persona-hint {
+  width: 100%;
+  margin-top: 6px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .start-btn {

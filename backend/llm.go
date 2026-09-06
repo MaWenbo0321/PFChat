@@ -188,13 +188,13 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 	targetLang := getLanguageFullName(session.TargetLanguage)
 	suggestionLang := getSuggestionLanguageName(msgLang, session.TargetLanguage, isChineseMsg)
 	analysisTarget := getAnalysisTargetName(current.Role, isChineseMsg)
-	roleProfile := getLLMRoleProfile(session.LLMRoleID)
+	roleProfile := getSessionLLMRoleProfile(session)
 	humanUser := sender
 	if current.Role == ErrorSourceLLM {
 		humanUser = receiver
 	}
 	llmCountry := getLLMPersonaNativeCountry(session, humanUser)
-	llmNativeLang := getLanguageNameByCountry(llmCountry)
+	llmNativeLang := getLLMPersonaNativeLanguage(session, humanUser)
 	explanationCountry := sender.Country
 	if current.Role == ErrorSourceLLM {
 		explanationCountry = receiver.Country
@@ -751,6 +751,10 @@ func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
 }
 
 func callDashScopeJSON(prompt string, target any, maxCompletionTokens int) error {
+	return callDashScopeJSONWithTemperature(prompt, target, maxCompletionTokens, 0.2)
+}
+
+func callDashScopeJSONWithTemperature(prompt string, target any, maxCompletionTokens int, temperature float64) error {
 	reqBody := DashScopeRequest{
 		Model: getDashScopeModel(),
 		Input: DashScopeInput{
@@ -760,7 +764,7 @@ func callDashScopeJSON(prompt string, target any, maxCompletionTokens int) error
 		},
 		Parameters: DashScopeParameters{
 			ResultFormat:        "message",
-			Temperature:         0.2,
+			Temperature:         temperature,
 			MaxCompletionTokens: maxCompletionTokens,
 			ResponseFormat:      &DashScopeResponseFormat{Type: "json_object"},
 			EnableThinking:      boolPtr(false),

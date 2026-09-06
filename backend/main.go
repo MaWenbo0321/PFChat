@@ -45,6 +45,7 @@ func main() {
 			auth.POST("/messages/errors", getMessageErrorsByIds)
 
 			// 会话管理接口
+			auth.GET("/persona/countries", getPersonaCountryOptions)
 			auth.POST("/sessions", createSession)
 			auth.GET("/sessions/active", getActiveSession)
 			auth.POST("/sessions/:id/end", endSession)

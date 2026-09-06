@@ -307,7 +307,7 @@ func buildUserL2Prompt(session ConversationSession, history []Message, userInput
 	topic := session.Topic
 	userNativeLang := getLanguageNameByCountry(user.Country)
 	targetLangFull := getLanguageFullName(targetLang)
-	roleProfile := getLLMRoleProfile(session.LLMRoleID)
+	roleProfile := getSessionLLMRoleProfile(session)
 	llmCountry := getLLMPersonaNativeCountry(session, user)
 	llmCulture := getCountryName(llmCountry)
 
@@ -361,10 +361,10 @@ func buildLLML2PromptWithResearch(session ConversationSession, history []Message
 	topic := session.Topic
 	userNativeLang := getLanguageNameByCountry(user.Country)
 	targetLangFull := getLanguageFullName(targetLang)
-	roleProfile := getLLMRoleProfile(session.LLMRoleID)
+	roleProfile := getSessionLLMRoleProfile(session)
 	learnerCountry := getLLMPersonaNativeCountry(session, user)
 	learnerCulture := getCountryName(learnerCountry)
-	learnerNativeLang := getLanguageNameByCountry(learnerCountry)
+	learnerNativeLang := getLLMPersonaNativeLanguage(session, user)
 	userCulture := getCountryName(user.Country)
 
 	sb.WriteString(buildLLMRolePrompt(roleProfile, learnerCountry, targetLangFull, false))
@@ -575,7 +575,7 @@ func searchPragmaticExamples(session ConversationSession, user User) (PragmaticE
 }
 
 func buildPragmaticResearchPrompt(session ConversationSession, user User) string {
-	roleProfile := getLLMRoleProfile(session.LLMRoleID)
+	roleProfile := getSessionLLMRoleProfile(session)
 	conditions := struct {
 		LearnerCountry string `json:"learner_country"`
 		UserCountry    string `json:"user_country"`
@@ -899,10 +899,10 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 	isZh := isChineseUser(user)
 	targetLang := getLanguageFullName(session.TargetLanguage)
 	humanCulture := getCountryName(user.Country)
-	roleProfile := getLLMRoleProfile(session.LLMRoleID)
+	roleProfile := getSessionLLMRoleProfile(session)
 	llmCountry := getLLMPersonaNativeCountry(session, user)
 	llmCulture := getCountryName(llmCountry)
-	llmNativeLang := getLanguageNameByCountry(llmCountry)
+	llmNativeLang := getLLMPersonaNativeLanguage(session, user)
 
 	if isZh {
 		sb.WriteString("你是 PFChat 的跨文化语用学会话反馈评估器。请在完整会话结束后进行一次性分析，而不是逐句批改。\n")
@@ -914,6 +914,7 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 		sb.WriteString(fmt.Sprintf("Human Listener/Speaker 文化背景: %s\n", humanCulture))
 		sb.WriteString(fmt.Sprintf("LLM角色: %s，%d岁，%s。%s %s\n", roleProfile.NameZH, roleProfile.Age, roleProfile.GenderZH, roleProfile.PersonalityZH, roleProfile.BackgroundZH))
 		sb.WriteString(fmt.Sprintf("LLM Speaker 文化背景: %s，母语/主要语言: %s\n\n", llmCulture, llmNativeLang))
+		sb.WriteString("一致性要求: 报告必须沿用上述 LLM 角色姓名、国家/地区和语言背景；不得擅自替换为其他国家文化，也不得用国籍概括人格。\n\n")
 	} else {
 		sb.WriteString("You are PFChat's cross-cultural pragmatics session-feedback evaluator. Analyze the completed conversation once, not sentence by sentence.\n")
 		sb.WriteString("Your output will be stored as this session's feedback record. Select only the 0-6 most representative issues; do not create a record for every utterance.\n\n")
@@ -924,6 +925,7 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 		sb.WriteString(fmt.Sprintf("Human Listener/Speaker cultural background: %s\n", humanCulture))
 		sb.WriteString(fmt.Sprintf("LLM role: %s, age %d, %s. %s %s\n", roleProfile.NameEN, roleProfile.Age, roleProfile.GenderEN, roleProfile.PersonalityEN, roleProfile.BackgroundEN))
 		sb.WriteString(fmt.Sprintf("LLM Speaker cultural background: %s; native/main language: %s\n\n", llmCulture, llmNativeLang))
+		sb.WriteString("Consistency rule: keep the exact LLM name, country/region, and language background above. Never substitute another national culture or use nationality as a personality summary.\n\n")
 	}
 
 	if session.Mode == ModeLLML2 {
@@ -997,11 +999,21 @@ func isChineseUser(user User) bool {
 }
 
 func getLLMPersonaNativeCountry(session ConversationSession, user User) string {
-	profile := getLLMRoleProfile(session.LLMRoleID)
+	if country := strings.ToUpper(strings.TrimSpace(session.LLMCountry)); country != "" {
+		return country
+	}
+	profile := getSessionLLMRoleProfile(session)
 	if session.Mode == ModeUserL2 {
 		return profile.Country
 	}
 	return resolveLLMLearnerCountry(session.TargetLanguage, user.Country, profile.Country)
+}
+
+func getLLMPersonaNativeLanguage(session ConversationSession, user User) string {
+	if language := strings.TrimSpace(session.LLMNativeLanguage); language != "" {
+		return language
+	}
+	return getLanguageNameByCountry(getLLMPersonaNativeCountry(session, user))
 }
 
 func resolveLLMLearnerCountry(targetLang string, userCountry string, preferredCountry string) string {
