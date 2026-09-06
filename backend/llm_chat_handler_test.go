@@ -329,3 +329,75 @@ func TestSanitizePragmaticResearchRejectsIncompleteAndUnsafeSources(t *testing.T
 		t.Fatalf("unexpected sanitized sources: %#v", sources)
 	}
 }
+
+func TestCombinedPromptGuardsClassificationCultureAndIntendedMeaning(t *testing.T) {
+	session := ConversationSession{
+		Mode: ModeLLML2, TargetLanguage: "EN", RelationshipType: "Teacher & Student", Topic: "Academic Discussion",
+		LLMRoleID: "aiko", LLMCountry: "JP", LLMNativeLanguage: "Japanese",
+		LLMNameZH: "佐藤美咲", LLMNameEN: "Misaki Sato", LLMAge: 22,
+		LLMGenderZH: "女性", LLMGenderEN: "woman",
+		LLMPersonalityZH: "细致但口头表达时偶尔犹豫", LLMBackgroundZH: "正在撰写毕业论文。",
+		LLMPersonalityEN: "detail-oriented but sometimes hesitant when speaking", LLMBackgroundEN: "Writing an undergraduate thesis.",
+	}
+	prompt := buildCombinedPrompt(
+		nil,
+		Message{Role: ErrorSourceLLM, Content: "I am sorry for my laziness. Give me more time."},
+		User{Country: "JP", Role: RoleBot},
+		User{Country: "CN"},
+		session,
+	)
+	for _, want := range []string{
+		"Country/region and native language are context, not sufficient evidence for cultural attribution",
+		"both are true, error_type must be ‘语用语言失误和社会语用失误’",
+		"first neutrally and tentatively paraphrase the communicative intention",
+		"Never infer native-speaker status from country/region alone",
+		"may mean",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("combined prompt is missing guardrail %q\n%s", want, prompt)
+		}
+	}
+}
+
+func TestCombinedPromptContainsChineseCulturalAttributionGate(t *testing.T) {
+	session := ConversationSession{Mode: ModeLLML2, TargetLanguage: "ZH", RelationshipType: "师生", Topic: "学术讨论", LLMRoleID: "aiko"}
+	prompt := buildCombinedPrompt(
+		nil,
+		Message{Role: ErrorSourceLLM, Content: "都是我太懒了，请给我延期。"},
+		User{Country: "JP", Role: RoleBot},
+		User{Country: "CN"},
+		session,
+	)
+	for _, want := range []string{
+		"国家/地区和母语只是背景信息，不是文化归因的充分证据",
+		"两者均为 true 时，error_type 必须是‘语用语言失误和社会语用失误’",
+		"先用中性、非断言语气说明说话者可能想完成的交际意图",
+		"不得仅凭国家/地区推断其母语身份",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("Chinese combined prompt is missing guardrail %q\n%s", want, prompt)
+		}
+	}
+}
+
+func TestSessionFeedbackPromptExplainsLikelyL2IntentionWithoutNationalityInference(t *testing.T) {
+	session := ConversationSession{
+		Mode: ModeLLML2, TargetLanguage: "EN", RelationshipType: "师生", Topic: "学术讨论",
+		LLMRoleID: "aiko", LLMCountry: "JP", LLMNativeLanguage: "Japanese",
+		LLMNameZH: "佐藤美咲", LLMNameEN: "Misaki Sato", LLMAge: 22,
+		LLMGenderZH: "女性", LLMGenderEN: "woman",
+		LLMPersonalityZH: "细致但口头表达时偶尔犹豫", LLMBackgroundZH: "正在撰写毕业论文。",
+		LLMPersonalityEN: "detail-oriented but sometimes hesitant when speaking", LLMBackgroundEN: "Writing an undergraduate thesis.",
+	}
+	prompt := buildSessionFeedbackPrompt(session, nil, User{Country: "CN"})
+	for _, want := range []string{
+		"先用中性、非断言语气说明说话者可能想完成的交际意图",
+		"不得仅凭国家/地区推断母语身份",
+		"国家/地区和母语只是背景，不是文化归因的充分证据",
+		"禁止把某个国家/文化背景写成固定缺陷或群体习惯",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("session feedback prompt is missing guardrail %q\n%s", want, prompt)
+		}
+	}
+}

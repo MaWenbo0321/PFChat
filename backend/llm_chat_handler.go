@@ -930,15 +930,15 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 
 	if session.Mode == ModeLLML2 {
 		if isZh {
-			sb.WriteString("LLM Speaker 是第二语言学习者。它的失误是训练样例：解释必须写给 Human Listener，说明听者可能如何理解、可以观察什么，不要对 LLM Speaker 说教。\n")
-			sb.WriteString("请将 LLM 角色的年龄、性格、个人弱点、文化背景和二语迁移作为解释指标：例如神经大条、没有边界感、含糊回避、过度道歉、抢话、直译式用词等，都可能影响 Human Listener 的理解。\n")
+			sb.WriteString("LLM Speaker 是第二语言学习者。它的失误是训练样例：每条解释应先用中性、非断言语气说明说话者可能想完成的交际意图，再说明 Human Listener 可能如何理解、可以观察什么，不要对 LLM Speaker 说教。母语或熟练听者尤其需要这项意图释义；不得仅凭国家/地区推断母语身份，无法确认时仍可用‘可能’‘看起来’等限定语提供释义。\n")
+			sb.WriteString("请优先从当前措辞、具体关系、角色的个人经历与个体弱点，以及可观察到的二语迁移解释问题。国家/地区和母语只是背景，不是文化归因的充分证据。\n")
 			sb.WriteString("请平衡识别语用语言失误和社会语用失误。除礼貌/关系误判外，也要关注自然的二语问题：语序错误、用词不当、句子成分颠倒、错别字/拼写近似、搭配生硬；只有这些影响意图、礼貌或理解时才列为语用语言失误。\n")
-			sb.WriteString("不要把某个国家/文化背景本身写成固定缺陷；如需解释文化因素，必须结合具体角色、关系和场景说明。\n\n")
+			sb.WriteString("只有对话明确给出个人文化经历，或上下文提供具体且可验证的文化惯例时，才可用‘可能与……有关’的有限文化解释；否则在措辞、个人习惯、二语迁移和关系层面解释。禁止把某个国家/文化背景写成固定缺陷或群体习惯。\n\n")
 		} else {
-			sb.WriteString("The LLM Speaker is an L2 learner. Its mistakes are training samples: explanations must be written for the Human Listener, describing how the listener may interpret them and what to observe. Do not lecture the LLM Speaker.\n")
-			sb.WriteString("Use the LLM role's age, personality, individual flaws, cultural background, and L2 transfer as explanation factors: carelessness, weak boundaries, vague avoidance, over-apology, interruption, literal word choice, and similar patterns may affect Human Listener interpretation.\n")
+			sb.WriteString("The LLM Speaker is an L2 learner. Its mistakes are training samples: each explanation must first neutrally and tentatively paraphrase the communicative intention the speaker may have meant, then describe how the Human Listener may interpret it and what to observe. Do not lecture the LLM Speaker. This paraphrase is especially important for a native or proficient listener; never infer native-speaker status from country/region alone, and use qualifiers such as ‘may mean’ when proficiency is uncertain.\n")
+			sb.WriteString("Explain problems first through the current wording, specific relationship, the role's personal experience and individual limitations, and observable L2 transfer. Country/region and native language are context, not sufficient evidence for cultural attribution.\n")
 			sb.WriteString("Balance pragmalinguistic and sociopragmatic issues. In addition to politeness or relationship mismatches, notice natural L2 problems such as word order errors, poor word choice, reversed sentence parts, typo-like spelling, and awkward collocations; list them as pragmalinguistic only when they affect intent, politeness, or understanding.\n")
-			sb.WriteString("Do not turn a country or cultural background into a fixed flaw. If cultural factors matter, connect them to the specific role, relationship, and situation.\n\n")
+			sb.WriteString("Mention culture only when the conversation states a personal cultural experience or the context supplies a specific, verifiable convention, and use bounded wording such as ‘may be related to’. Otherwise explain at the wording, individual-habit, L2-transfer, and relationship levels. Never turn a country or culture into a fixed flaw or group habit.\n\n")
 		}
 	}
 
