@@ -1,5 +1,17 @@
 #!/bin/bash
 
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$PROJECT_ROOT/.env"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "[Error] Missing $ENV_FILE. Copy .env.example to .env and fill in the secrets first."
+    exit 1
+fi
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+cd "$PROJECT_ROOT" || exit 1
+
 # 颜色定义
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -20,9 +32,9 @@ cd docker || exit
 
 # 使用 docker-compose 或 docker compose
 if command -v docker-compose &> /dev/null; then
-    sudo docker-compose up -d
+    sudo docker-compose --env-file "$ENV_FILE" up -d
 else
-    sudo docker compose up -d
+    sudo docker compose --env-file "$ENV_FILE" up -d
 fi
 
 if [ $? -ne 0 ]; then
@@ -92,9 +104,8 @@ echo -e "${BLUE}📍 访问地址:${NC}"
 echo -e "   前端: ${GREEN}http://localhost:3000${NC}"
 echo -e "   后端: ${GREEN}http://localhost:8080${NC}"
 echo ""
-echo -e "${BLUE}📝 默认管理员账号:${NC}"
-echo -e "   用户名: ${GREEN}admin${NC}"
-echo -e "   密码: ${GREEN}admin123456${NC}"
+echo -e "${BLUE}📝 管理员账号:${NC}"
+echo -e "   如需初始创建，请在 .env 中设置 DEFAULT_ADMIN_USERNAME 和 DEFAULT_ADMIN_PASSWORD${NC}"
 echo ""
 echo -e "${BLUE}📊 进程信息:${NC}"
 echo -e "   后端 PID: ${GREEN}$BACKEND_PID${NC}"

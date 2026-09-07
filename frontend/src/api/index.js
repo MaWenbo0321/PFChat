@@ -98,13 +98,17 @@ const api = {
     getLLMBotInfo: () => instance.get('/bot/info'),
 
     // 语法错误相关
-    getGrammarErrors: (errorType = 'all') => {
-        const params = errorType && errorType !== 'all' ? { error_type: errorType } : {}
+    getGrammarErrors: (errorType = 'all', sessionMode = 'all') => {
+        const params = {}
+        if (errorType && errorType !== 'all') params.error_type = errorType
+        if (sessionMode && sessionMode !== 'all') params.session_mode = sessionMode
         return instance.get('/grammar-errors', { params })
     },
     deleteGrammarError: (id) => instance.delete(`/grammar-errors/${id}`),
     batchDeleteGrammarErrors: (ids) => instance.post('/grammar-errors/batch-delete', { ids }),
-    clearGrammarErrors: (type = 'all') => instance.delete(`/grammar-errors/clear/${type}`),
+    clearGrammarErrors: (type = 'all', sessionMode = 'all') => instance.delete(`/grammar-errors/clear/${type}`, {
+        params: sessionMode && sessionMode !== 'all' ? { session_mode: sessionMode } : {}
+    }),
     updateGrammarErrorType: (id, errorType) => instance.put(`/grammar-errors/${id}/type`, { error_type: errorType }),
 
     // 管理员相关

@@ -15,11 +15,13 @@ type GetMessageErrorsRequest struct {
 }
 
 type MessageErrorInfo struct {
-	MessageID       uint   `json:"message_id"`
-	ErrorType       string `json:"error_type"`
-	IntendedMeaning string `json:"intended_meaning"`
-	Suggestion      string `json:"suggestion"`
-	Explanation     string `json:"explanation"`
+	MessageID           uint   `json:"message_id"`
+	SessionMode         string `json:"session_mode"`
+	ErrorType           string `json:"error_type"`
+	ConversationSummary string `json:"conversation_summary"`
+	IntendedMeaning     string `json:"intended_meaning"`
+	Suggestion          string `json:"suggestion"`
+	Explanation         string `json:"explanation"`
 }
 
 func getMessageErrorsByIds(c *gin.Context) {
@@ -45,11 +47,13 @@ func getMessageErrorsByIds(c *gin.Context) {
 	result := make([]MessageErrorInfo, 0, len(errors))
 	for _, err := range errors {
 		result = append(result, MessageErrorInfo{
-			MessageID:       err.MessageID,
-			ErrorType:       err.ErrorType,
-			IntendedMeaning: err.LLMIntendedMeaning,
-			Suggestion:      err.LLMSuggestion,
-			Explanation:     err.LLMExplanation,
+			MessageID:           err.MessageID,
+			SessionMode:         err.SessionMode,
+			ErrorType:           err.ErrorType,
+			ConversationSummary: err.ConversationSummary,
+			IntendedMeaning:     err.LLMIntendedMeaning,
+			Suggestion:          err.LLMSuggestion,
+			Explanation:         err.LLMExplanation,
 		})
 	}
 

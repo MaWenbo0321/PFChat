@@ -1,18 +1,26 @@
 package main
 
 import (
+	"crypto/rand"
 	"errors"
 	"log"
+	"net"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/mysql"
+	gormmysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
 var db *gorm.DB
 
 func main() {
+	if err := validateRuntimeConfig(); err != nil {
+		log.Fatal("Invalid runtime configuration: ", err)
+	}
+
 	// 初始化数据库
 	initDB()
 
@@ -90,8 +98,19 @@ func main() {
 
 func initDB() {
 	var err error
-	dsn := "im_user:im_password@tcp(:3306)/im_system?charset=utf8mb4&parseTime=True&loc=Local"
-	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	mysqlConfig := mysqldriver.Config{
+		User:      envValue("MYSQL_USER"),
+		Passwd:    envValue("MYSQL_PASSWORD"),
+		Net:       "tcp",
+		Addr:      net.JoinHostPort(envValueOrDefault("MYSQL_HOST", "127.0.0.1"), envValueOrDefault("MYSQL_PORT", "3306")),
+		DBName:    envValue("MYSQL_DATABASE"),
+		ParseTime: true,
+		Loc:       time.Local,
+		Params: map[string]string{
+			"charset": "utf8mb4",
+		},
+	}
+	db, err = gorm.Open(gormmysql.Open(mysqlConfig.FormatDSN()), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
@@ -99,6 +118,9 @@ func initDB() {
 	// 自动迁移
 	if err := db.AutoMigrate(&User{}, &Message{}, &GrammarError{}, &ConversationSession{}); err != nil {
 		log.Fatal("Failed to migrate database:", err)
+	}
+	if err := backfillGrammarErrorSessionModes(); err != nil {
+		log.Printf("Failed to backfill grammar error session modes: %v", err)
 	}
 
 	// 创建默认管理员账号
@@ -108,6 +130,16 @@ func initDB() {
 	createLLMBotUser()
 
 	log.Println("Database connected and migrated")
+}
+
+func backfillGrammarErrorSessionModes() error {
+	return db.Exec(`
+		UPDATE grammar_errors AS ge
+		JOIN conversation_sessions AS cs ON cs.id = ge.session_id
+		SET ge.session_mode = cs.mode
+		WHERE ge.session_id > 0
+		  AND (ge.session_mode IS NULL OR ge.session_mode = '')
+	`).Error
 }
 
 func createLLMBotUser() {
@@ -121,7 +153,12 @@ func createLLMBotUser() {
 		return
 	}
 	{
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("llmbot_not_login"), bcrypt.DefaultCost)
+		botPassword := make([]byte, 32)
+		if _, err := rand.Read(botPassword); err != nil {
+			log.Printf("Failed to generate bot password: %v", err)
+			return
+		}
+		hashedPassword, err := bcrypt.GenerateFromPassword(botPassword, bcrypt.DefaultCost)
 		if err != nil {
 			log.Printf("Failed to hash bot password: %v", err)
 			return
@@ -151,14 +188,20 @@ func createDefaultAdmin() {
 		return
 	}
 	{
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123456"), bcrypt.DefaultCost)
+		adminUsername := envValue("DEFAULT_ADMIN_USERNAME")
+		adminPassword := envValue("DEFAULT_ADMIN_PASSWORD")
+		if adminUsername == "" || adminPassword == "" {
+			log.Println("No administrator exists; set DEFAULT_ADMIN_USERNAME and DEFAULT_ADMIN_PASSWORD, then restart to create one")
+			return
+		}
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
 		if err != nil {
 			log.Printf("Failed to hash admin password: %v", err)
 			return
 		}
 
 		defaultAdmin := User{
-			Username: "admin",
+			Username: adminUsername,
 			Password: string(hashedPassword),
 			Country:  "CN",
 			Role:     RoleAdmin,
@@ -167,7 +210,7 @@ func createDefaultAdmin() {
 		if err := db.Create(&defaultAdmin).Error; err != nil {
 			log.Printf("Failed to create default admin: %v", err)
 		} else {
-			log.Println("Default admin account created - Username: admin, Password: admin123456")
+			log.Printf("Default admin account created - Username: %s", adminUsername)
 		}
 	}
 }

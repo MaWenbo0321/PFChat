@@ -166,11 +166,15 @@
                         {{ messageErrors[msg.id].error_type }}
                       </el-tag>
                     </div>
-                    <div v-if="messageErrors[msg.id].intended_meaning" class="error-popover-section">
+                    <div v-if="messageErrors[msg.id].conversation_summary" class="error-popover-section">
+                      <div class="error-popover-label">{{ $t('chat.conversationSummary') }}</div>
+                      <div class="error-popover-text conversation-summary-text">{{ messageErrors[msg.id].conversation_summary }}</div>
+                    </div>
+                    <div v-if="sessionStore.currentSession?.mode === 'llm_l2' && messageErrors[msg.id].intended_meaning" class="error-popover-section">
                       <div class="error-popover-label">{{ $t('chat.intendedMeaning') }}</div>
                       <div class="error-popover-text intended-meaning-text">{{ messageErrors[msg.id].intended_meaning }}</div>
                     </div>
-                    <div v-if="messageErrors[msg.id].suggestion" class="error-popover-section">
+                    <div v-if="sessionStore.currentSession?.mode === 'user_l2' && messageErrors[msg.id].suggestion" class="error-popover-section">
                       <div class="error-popover-label">{{ $t('chat.suggestion') }}</div>
                       <div class="error-popover-text suggestion-text">{{ messageErrors[msg.id].suggestion }}</div>
                     </div>
@@ -254,11 +258,15 @@
             <div class="error-popover-label">{{ $t('chat.errorType') }}</div>
             <el-tag :type="isProblematicType(turnFeedback.check.error_type) ? 'danger' : 'warning'">{{ turnFeedback.check.error_type }}</el-tag>
           </div>
-          <div v-if="turnFeedback.check.intended_meaning" class="error-popover-section feedback-section">
+          <div v-if="turnFeedback.check.conversation_summary" class="error-popover-section feedback-section">
+            <div class="error-popover-label">{{ $t('chat.conversationSummary') }}</div>
+            <div class="turn-feedback-text conversation-summary-text">{{ turnFeedback.check.conversation_summary }}</div>
+          </div>
+          <div v-if="sessionStore.currentSession?.mode === 'llm_l2' && turnFeedback.check.intended_meaning" class="error-popover-section feedback-section">
             <div class="error-popover-label">{{ $t('chat.intendedMeaning') }}</div>
             <div class="turn-feedback-text intended-meaning-text">{{ turnFeedback.check.intended_meaning }}</div>
           </div>
-          <div class="error-popover-section">
+          <div v-if="sessionStore.currentSession?.mode === 'user_l2'" class="error-popover-section">
             <div class="error-popover-label">{{ $t('chat.suggestion') }}</div>
             <div class="turn-feedback-text suggestion-text">{{ turnFeedback.check.suggestion || $t('feedback.noSuggestion') }}</div>
           </div>
@@ -1265,6 +1273,15 @@ watch(() => sessionStore.messages.length, async () => {
   padding: 8px 10px;
   background: #ecf5ff;
   border-radius: 6px;
+}
+
+.conversation-summary-text {
+  color: #5b4b8a;
+  padding: 8px 10px;
+  background: #f5f3ff;
+  border-radius: 6px;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 /* ===================== 输入区域 ===================== */

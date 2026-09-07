@@ -19,7 +19,6 @@ const (
 	dashScopeDefaultAPIURL  = "https://llm-26cli7e69esmbtok.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 	dashScopeGenerationPath = "/services/aigc/multimodal-generation/generation"
 	defaultModel            = "qwen3.8-flash"
-	fallbackDashScopeAPIKey = "sk-8ab77da79b894ba6beb61c9190c74602"
 )
 
 // DashScope 请求结构（原生 HTTP 调用格式）
@@ -133,11 +132,12 @@ type DashScopeResponseMessage struct {
 
 // GrammarCheckResponse 语用失误检查响应结构 (LLM 返回的 JSON)
 type GrammarCheckResponse struct {
-	HasError        bool   `json:"has_error"`
-	IntendedMeaning string `json:"intended_meaning"`
-	Suggestion      string `json:"suggestion"`
-	Explanation     string `json:"explanation"`
-	ErrorType       string `json:"error_type"`
+	HasError            bool   `json:"has_error"`
+	ConversationSummary string `json:"conversation_summary"`
+	IntendedMeaning     string `json:"intended_meaning"`
+	Suggestion          string `json:"suggestion"`
+	Explanation         string `json:"explanation"`
+	ErrorType           string `json:"error_type"`
 	// 新增字段: LLM 返回的详细分析
 	Impoliteness               bool   `json:"impoliteness"`
 	LinguisticPragmaticFailure bool   `json:"linguistic_pragmatic_failure"`
@@ -190,6 +190,7 @@ func normalizeGrammarCheckResult(result *GrammarCheckResponse) {
 		return
 	}
 
+	result.ConversationSummary = strings.TrimSpace(result.ConversationSummary)
 	result.IntendedMeaning = sanitizeIntendedMeaning(result.IntendedMeaning)
 	result.Suggestion = strings.TrimSpace(result.Suggestion)
 	result.Explanation = strings.TrimSpace(result.Explanation)
@@ -231,6 +232,7 @@ func normalizeGrammarCheckResult(result *GrammarCheckResponse) {
 
 	if !result.HasError {
 		result.ErrorType = ""
+		result.ConversationSummary = ""
 		result.IntendedMeaning = ""
 		result.Suggestion = ""
 		result.Explanation = ""
@@ -342,7 +344,9 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("- 两者均为 true 时，error_type 必须是‘语用语言失误和社会语用失误’；两者均为 false 时，has_error 必须为 false 且 error_type 留空。\n")
 		sb.WriteString("- explanation 不得声称存在布尔字段未标记的错误类型；输出前必须检查布尔字段、error_type 和 explanation 完全一致。\n\n")
 		if current.Role == ErrorSourceLLM {
-			sb.WriteString("重要说明: 当前被分析对象是 LLM Bot 模拟的第二语言说话者。intended_meaning 必须单独写给 Human Listener，用中性、非断言语气说明说话者可能想完成的交际意图；该字段只能包含意图释义本身，不得带‘说话者可能想表达：’‘可能意图：’等字段名或前缀。explanation 再说明实际措辞可能让听者如何理解、为什么它是一个训练样例，以及听者可以观察到什么。不要用‘你应该……’对 LLM Bot 说教。如果 Human Listener 是当前语言的母语或熟练使用者，这项意图释义尤其重要；不得仅凭国家/地区推断其母语身份，无法确认时仍可提供释义，但应使用‘可能’‘看起来’等限定语。\n\n")
+			sb.WriteString("重要说明: 当前被分析对象是 LLM Bot 模拟的第二语言说话者。intended_meaning 必须单独写给 Human Listener，用中性、非断言语气说明说话者可能想完成的交际意图；该字段只能包含意图释义本身，不得带‘说话者可能想表达：’‘可能意图：’等字段名或前缀。LLM 作为学习者时不向 Human Listener 提供修改建议，因此 suggestion 必须为空字符串。explanation 再说明实际措辞可能让听者如何理解、为什么它是一个训练样例，以及听者可以观察到什么。不要用‘你应该……’对 LLM Bot 说教。如果 Human Listener 是当前语言的母语或熟练使用者，这项意图释义尤其重要；不得仅凭国家/地区推断其母语身份，无法确认时仍可提供释义，但应使用‘可能’‘看起来’等限定语。\n\n")
+		} else {
+			sb.WriteString("重要说明: 当前被分析对象是使用第二语言的人类用户。请提供可执行的 suggestion，但 intended_meaning 必须为空字符串；用户知道自己想表达什么，不需要系统替其猜测意图。\n\n")
 		}
 
 		sb.WriteString("字段含义:\n")
@@ -396,7 +400,9 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("- If both are true, error_type must be ‘语用语言失误和社会语用失误’. If both are false, has_error must be false and error_type must be empty.\n")
 		sb.WriteString("- The explanation must not claim an error category whose boolean is false. Before output, verify that the booleans, error_type, and explanation agree exactly.\n\n")
 		if current.Role == ErrorSourceLLM {
-			sb.WriteString("Important: the current target is an LLM Bot simulating an L2 speaker. Write intended_meaning as a separate field for the Human Listener, neutrally and tentatively paraphrasing the communicative intention the speaker may have meant. This field must contain only the paraphrase itself, never a label or prefix such as ‘Likely intended meaning:’. Use explanation only for how the actual wording may be interpreted, why it works as a training sample, and what the listener can observe. Do not lecture the LLM Bot with ‘you should...’. This intended-meaning paraphrase is especially important when the Human Listener is a native or proficient speaker of the current language. Never infer native-speaker status from country/region alone; if proficiency is uncertain, still offer the paraphrase using qualifiers such as ‘may mean’ or ‘appears to be trying to’.\n\n")
+			sb.WriteString("Important: the current target is an LLM Bot simulating an L2 speaker. Write intended_meaning as a separate field for the Human Listener, neutrally and tentatively paraphrasing the communicative intention the speaker may have meant. This field must contain only the paraphrase itself, never a label or prefix such as ‘Likely intended meaning:’. When the LLM is the learner, do not give the Human Listener a revision, so suggestion must be an empty string. Use explanation only for how the actual wording may be interpreted, why it works as a training sample, and what the listener can observe. Do not lecture the LLM Bot with ‘you should...’. This intended-meaning paraphrase is especially important when the Human Listener is a native or proficient speaker of the current language. Never infer native-speaker status from country/region alone; if proficiency is uncertain, still offer the paraphrase using qualifiers such as ‘may mean’ or ‘appears to be trying to’.\n\n")
+		} else {
+			sb.WriteString("Important: the current target is a human user communicating in an L2. Provide an actionable suggestion, but intended_meaning must be an empty string; the user already knows their own intent and the system must not guess it for them.\n\n")
 		}
 
 		sb.WriteString("Field meanings:\n")
@@ -448,21 +454,37 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 	sb.WriteString("  \"social_pragmatic_failure\": true/false,\n")
 	sb.WriteString("  \"overall_evaluation\": \"good\"/\"improvable\"/\"problematic\",\n")
 	sb.WriteString("  \"error_type\": \"语用语言失误/社会语用失误/严重语用语言失误/严重社会语用失误/语用语言失误和社会语用失误\",\n")
-	sb.WriteString("  \"intended_meaning\": \"tentative paraphrase of what the speaker likely meant, in the human listener's language\",\n")
-	sb.WriteString("  \"suggestion\": \"single revised sentence in the SAME language as the original message\",\n")
+	sb.WriteString("  \"conversation_summary\": \"about five concise sentences describing the relevant conversation context\",\n")
+	if current.Role == ErrorSourceLLM {
+		sb.WriteString("  \"intended_meaning\": \"tentative paraphrase of what the LLM speaker likely meant, in the human listener's language\",\n")
+		sb.WriteString("  \"suggestion\": \"\",\n")
+	} else {
+		sb.WriteString("  \"intended_meaning\": \"\",\n")
+		sb.WriteString("  \"suggestion\": \"single revised sentence in the SAME language as the original message\",\n")
+	}
 	sb.WriteString("  \"explanation\": \"brief reason and improvement advice\"\n")
 	sb.WriteString("}\n\n")
 
 	if isChineseMsg {
 		sb.WriteString("如果没有语用失误，返回:\n")
-		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"error_type\": \"\", \"intended_meaning\": \"\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
-		sb.WriteString(fmt.Sprintf("输出语言要求: intended_meaning 和 explanation 必须使用%s；suggestion 必须使用%s，并且只包含一个最佳修改句。suggestion 只能调整措辞，不得新增或改变原消息中的原因、责任、时间、承诺或其他事实。\n", explanationLang, suggestionLang))
-		sb.WriteString("如果 has_error 为 false，intended_meaning、suggestion 和 explanation 必须为空字符串。输出前核对人物国家/地区、母语、关系和已知事实，并确保布尔分类、error_type、suggestion 与 explanation 相互一致。\n")
+		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"error_type\": \"\", \"conversation_summary\": \"\", \"intended_meaning\": \"\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
+		sb.WriteString(fmt.Sprintf("conversation_summary 必须使用%s，用大约5个简洁句子概括与本次错误直接相关的对话：说明主题、双方关系、双方大致或准确说了什么，以及当前问题出现前后的语境。只能使用聊天记录和会话字段中的事实，不得补写事件、原因或动机。\n", explanationLang))
+		if current.Role == ErrorSourceLLM {
+			sb.WriteString(fmt.Sprintf("输出语言要求: intended_meaning 和 explanation 必须使用%s；suggestion 必须为空字符串。\n", explanationLang))
+		} else {
+			sb.WriteString(fmt.Sprintf("输出语言要求: explanation 必须使用%s；intended_meaning 必须为空字符串；suggestion 必须使用%s，并且只包含一个最佳修改句。suggestion 只能调整措辞，不得新增或改变原消息中的原因、责任、时间、承诺或其他事实。\n", explanationLang, suggestionLang))
+		}
+		sb.WriteString("如果 has_error 为 false，conversation_summary、intended_meaning、suggestion 和 explanation 必须为空字符串。输出前核对人物国家/地区、母语、关系和已知事实，并确保布尔分类、error_type、suggestion 与 explanation 相互一致。\n")
 	} else {
 		sb.WriteString("If no pragmatic failure is detected, return:\n")
-		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"error_type\": \"\", \"intended_meaning\": \"\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
-		sb.WriteString(fmt.Sprintf("Output language requirements: intended_meaning and explanation must be in %s; suggestion must be in %s and contain only one best revised sentence. The suggestion may improve wording only and must not add or change causes, responsibility, timing, commitments, or any other fact from the original message.\n", explanationLang, suggestionLang))
-		sb.WriteString("If has_error is false, intended_meaning, suggestion, and explanation must be empty strings. Before output, verify the role's country/region, native language, relationship, and known facts, then ensure the classification booleans, error_type, suggestion, and explanation are mutually consistent.\n")
+		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"error_type\": \"\", \"conversation_summary\": \"\", \"intended_meaning\": \"\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
+		sb.WriteString(fmt.Sprintf("conversation_summary must be in %s and use about five concise sentences to summarize only the conversation relevant to this issue: include the topic, relationship, what each person said approximately or exactly, and the context immediately around the problem. Use only facts present in the chat and session fields; never invent events, causes, or motives.\n", explanationLang))
+		if current.Role == ErrorSourceLLM {
+			sb.WriteString(fmt.Sprintf("Output language requirements: intended_meaning and explanation must be in %s; suggestion must be an empty string.\n", explanationLang))
+		} else {
+			sb.WriteString(fmt.Sprintf("Output language requirements: explanation must be in %s; intended_meaning must be an empty string; suggestion must be in %s and contain only one best revised sentence. The suggestion may improve wording only and must not add or change causes, responsibility, timing, commitments, or any other fact from the original message.\n", explanationLang, suggestionLang))
+		}
+		sb.WriteString("If has_error is false, conversation_summary, intended_meaning, suggestion, and explanation must be empty strings. Before output, verify the role's country/region, native language, relationship, and known facts, then ensure the classification booleans, error_type, suggestion, and explanation are mutually consistent.\n")
 	}
 
 	return sb.String()
@@ -596,7 +618,7 @@ func getDashScopeAPIKey() string {
 	if apiKey := strings.TrimSpace(os.Getenv("DASHSCOPE_API_KEY")); apiKey != "" {
 		return apiKey
 	}
-	return fallbackDashScopeAPIKey
+	return ""
 }
 
 func getDashScopeModel() string {

@@ -1,4 +1,17 @@
 #!/bin/bash
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$PROJECT_ROOT/.env"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "[Error] Missing $ENV_FILE. Docker Compose needs it to resolve database settings."
+    exit 1
+fi
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+cd "$PROJECT_ROOT" || exit 1
+
 # 颜色定义
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -47,9 +60,9 @@ echo ""
 echo -e "${YELLOW}[MySQL] 停止 MySQL 数据库...${NC}"
 cd docker || exit
 if command -v docker-compose &> /dev/null; then
-    sudo docker-compose down
+    sudo docker-compose --env-file "$ENV_FILE" down
 else
-    sudo docker compose down
+    sudo docker compose --env-file "$ENV_FILE" down
 fi
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}[✓] MySQL 已停止${NC}"

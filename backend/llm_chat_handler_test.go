@@ -157,6 +157,7 @@ func TestSessionAggregationTreatsNoIssueAsGood(t *testing.T) {
 }
 
 func TestParseTokenClaimsRestrictsSigningMethod(t *testing.T) {
+	t.Setenv("JWT_SECRET", strings.Repeat("test-secret-", 4))
 	valid, err := generateToken(7, "tester", RoleUser)
 	if err != nil {
 		t.Fatal(err)
@@ -172,12 +173,33 @@ func TestParseTokenClaimsRestrictsSigningMethod(t *testing.T) {
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
 	})
+	jwtSecret, err := getJWTSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
 	wrongToken, err := wrongMethod.SignedString(jwtSecret)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := parseTokenClaims(wrongToken); err == nil {
 		t.Fatal("token signed with an unexpected algorithm was accepted")
+	}
+}
+
+func TestRuntimeSecretsRequireEnvironmentVariables(t *testing.T) {
+	t.Setenv("DASHSCOPE_API_KEY", "")
+	if got := getDashScopeAPIKey(); got != "" {
+		t.Fatal("DashScope API key must not fall back to a source-code secret")
+	}
+
+	t.Setenv("JWT_SECRET", "short")
+	if _, err := getJWTSecret(); err == nil {
+		t.Fatal("short JWT secret was accepted")
+	}
+
+	t.Setenv("JWT_SECRET", strings.Repeat("secure-test-secret-", 2))
+	if _, err := getJWTSecret(); err != nil {
+		t.Fatalf("valid environment JWT secret was rejected: %v", err)
 	}
 }
 
@@ -385,12 +407,15 @@ func TestCombinedPromptGuardsClassificationCultureAndIntendedMeaning(t *testing.
 		"Write intended_meaning as a separate field",
 		"Never infer native-speaker status from country/region alone",
 		"may mean",
-		"must not add or change causes, responsibility, timing, commitments, or any other fact",
 		"unsupported national or cultural generalization",
 		"current wording supplies direct observable evidence",
 		"Changing ‘all people from X’ to ‘people from X often/usually’ is still unacceptable",
 		"never a label or prefix such as ‘Likely intended meaning:’",
 		"Unknown motives, causes, responsibility, experiences, deadlines, and commitments",
+		"suggestion must be an empty string",
+		`"suggestion": ""`,
+		"about five concise sentences",
+		"topic, relationship, what each person said approximately or exactly",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("combined prompt is missing guardrail %q\n%s", want, prompt)
@@ -412,12 +437,13 @@ func TestCombinedPromptContainsChineseCulturalAttributionGate(t *testing.T) {
 		"两者均为 true 时，error_type 必须是‘语用语言失误和社会语用失误’",
 		"intended_meaning 必须单独写给 Human Listener",
 		"不得仅凭国家/地区推断其母语身份",
-		"不得新增或改变原消息中的原因、责任、时间、承诺或其他事实",
 		"概括整个国家/文化",
 		"当前措辞提供了可观察的直接证据",
 		"‘某国人通常/往往’仍不合格",
 		"只能包含意图释义本身",
 		"未知的动机、原因、责任、经历、期限和承诺",
+		"suggestion 必须为空字符串",
+		"用大约5个简洁句子概括",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("Chinese combined prompt is missing guardrail %q\n%s", want, prompt)
@@ -440,13 +466,68 @@ func TestSessionFeedbackPromptExplainsLikelyL2IntentionWithoutNationalityInferen
 		"不得仅凭国家/地区推断母语身份",
 		"国家/地区和母语只是背景，不是文化归因的充分证据",
 		"无依据国家/文化概括也应作为潜在社会语用问题评估",
-		"不得为了显得更礼貌而编造新理由或转移责任",
+		"llm_suggestion 必须为空字符串",
 		"不得使用‘中式英语’‘日式英语’等国别标签",
-		"‘所有某国人’改成‘某国人通常/往往’仍不合格",
+		"不得用‘某国人通常/往往’等较弱的群体判断替代原概括",
 		"不得带‘说话者可能想表达：’‘可能意图：’等字段名或前缀",
+		"conversation_summary 仅在 issues 非空时填写",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("session feedback prompt is missing guardrail %q\n%s", want, prompt)
+		}
+	}
+}
+
+func TestUserL2FeedbackOmitsIntendedMeaningAndKeepsSuggestion(t *testing.T) {
+	session := ConversationSession{Mode: ModeUserL2, TargetLanguage: "EN", RelationshipType: "colleagues", Topic: "business"}
+	prompt := buildCombinedPrompt(nil, Message{Role: ErrorSourceUser, Content: "Give me the report."}, User{Country: "CN"}, User{Country: "US", Role: RoleBot}, session)
+	for _, want := range []string{
+		"intended_meaning must be an empty string",
+		"Provide an actionable suggestion",
+		`"intended_meaning": ""`,
+		"conversation_summary",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("user L2 prompt is missing %q\n%s", want, prompt)
+		}
+	}
+
+	result := GrammarCheckResponse{IntendedMeaning: "must disappear", Suggestion: "Could you send me the report?"}
+	applyFeedbackFieldsForMode(&result, ModeUserL2)
+	if result.IntendedMeaning != "" || result.Suggestion == "" {
+		t.Fatalf("user L2 feedback fields were not normalized: %#v", result)
+	}
+}
+
+func TestUserL2SessionPromptOmitsIntendedMeaningAndKeepsSuggestion(t *testing.T) {
+	session := ConversationSession{Mode: ModeUserL2, TargetLanguage: "EN", RelationshipType: "colleagues", Topic: "business"}
+	prompt := buildSessionFeedbackPrompt(session, nil, User{Country: "US"})
+	for _, want := range []string{
+		"llm_intended_meaning must be an empty string",
+		"llm_suggestion should provide one directly usable revision",
+		"Fill conversation_summary only when issues is non-empty",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("user L2 session prompt is missing %q\n%s", want, prompt)
+		}
+	}
+}
+
+func TestLLML2FeedbackOmitsSuggestionAndKeepsIntendedMeaning(t *testing.T) {
+	result := GrammarCheckResponse{IntendedMeaning: "The speaker may be requesting the report.", Suggestion: "Give me the report."}
+	applyFeedbackFieldsForMode(&result, ModeLLML2)
+	if result.Suggestion != "" || result.IntendedMeaning == "" {
+		t.Fatalf("LLM L2 feedback fields were not normalized: %#v", result)
+	}
+}
+
+func TestSessionModeFilterValidation(t *testing.T) {
+	if !isValidSessionModeFilter(ModeUserL2) || !isValidSessionModeFilter(ModeLLML2) {
+		t.Fatal("supported learner modes were rejected")
+	}
+	for _, mode := range []string{"", "all", "native", "user"} {
+		if isValidSessionModeFilter(mode) {
+			t.Fatalf("unsupported learner mode %q was accepted", mode)
 		}
 	}
 }
@@ -503,10 +584,11 @@ func TestNormalizeGrammarCheckResultReconcilesContradictoryFields(t *testing.T) 
 		{
 			name: "case-insensitive good remains a clean result",
 			input: GrammarCheckResponse{
-				IntendedMeaning:   "must be cleared",
-				Suggestion:        "must be cleared",
-				Explanation:       "must be cleared",
-				OverallEvaluation: " GOOD ",
+				ConversationSummary: "must be cleared",
+				IntendedMeaning:     "must be cleared",
+				Suggestion:          "must be cleared",
+				Explanation:         "must be cleared",
+				OverallEvaluation:   " GOOD ",
 			},
 			wantHasError:   false,
 			wantEvaluation: "good",
@@ -520,7 +602,7 @@ func TestNormalizeGrammarCheckResultReconcilesContradictoryFields(t *testing.T) 
 			if got.HasError != tt.wantHasError || got.ErrorType != tt.wantType || got.OverallEvaluation != tt.wantEvaluation {
 				t.Fatalf("unexpected normalized result: %#v", got)
 			}
-			if !tt.wantHasError && (got.IntendedMeaning != "" || got.Suggestion != "" || got.Explanation != "") {
+			if !tt.wantHasError && (got.ConversationSummary != "" || got.IntendedMeaning != "" || got.Suggestion != "" || got.Explanation != "") {
 				t.Fatalf("clean result retained error-only details: %#v", got)
 			}
 		})

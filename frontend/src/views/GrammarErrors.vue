@@ -59,6 +59,16 @@
           <el-option :label="$t('grammar.errorType5')" value="语用语言失误和社会语用失误" />
           <el-option :label="$t('grammar.errorType6')" value="无明显语用失误" />
         </el-select>
+        <el-select
+            v-model="currentModeFilter"
+            :placeholder="$t('grammar.modeFilter')"
+            style="width: 260px"
+            @change="handleModeChange"
+        >
+          <el-option :label="$t('grammar.allModes')" value="all" />
+          <el-option :label="$t('grammar.userL2Mode')" value="user_l2" />
+          <el-option :label="$t('grammar.llmL2Mode')" value="llm_l2" />
+        </el-select>
       </div>
 
       <!-- 按类型分组展示 -->
@@ -98,6 +108,9 @@
                     <el-tag size="small" :type="error.source_role === 'llm' ? 'success' : 'primary'" effect="plain">
                       {{ getSourceRoleLabel(error.source_role) }}
                     </el-tag>
+                    <el-tag size="small" type="info" effect="plain">
+                      {{ getPracticeModeLabel(error) }}
+                    </el-tag>
                   </div>
                   <div class="error-actions">
                     <el-dropdown @command="(cmd) => handleCommand(cmd, error)">
@@ -127,7 +140,15 @@
                     <div class="original-text">{{ error.original_text }}</div>
                   </div>
 
-                  <div v-if="error.llm_intended_meaning" class="section">
+                  <div v-if="error.conversation_summary" class="section conversation-summary-section">
+                    <div class="section-title">
+                      <el-icon color="#8b5cf6"><ChatLineRound /></el-icon>
+                      {{ $t('grammar.conversationSummary') }}
+                    </div>
+                    <div class="conversation-summary-text">{{ error.conversation_summary }}</div>
+                  </div>
+
+                  <div v-if="shouldShowIntendedMeaning(error) && error.llm_intended_meaning" class="section">
                     <div class="section-title">
                       <el-icon color="#409eff"><InfoFilled /></el-icon>
                       {{ $t('grammar.intendedMeaning') }}
@@ -135,7 +156,7 @@
                     <div class="intended-meaning-text">{{ error.llm_intended_meaning }}</div>
                   </div>
 
-                  <div class="section">
+                  <div v-if="shouldShowSuggestion(error) && error.llm_suggestion" class="section">
                     <div class="section-title">
                       <el-icon color="#67c23a"><Check /></el-icon>
                       {{ $t('grammar.suggestion') }}
@@ -216,7 +237,8 @@ import {
   CopyDocument,
   MoreFilled,
   Edit,
-  Search
+  Search,
+  ChatLineRound
 } from '@element-plus/icons-vue'
 import api from '@/api'
 
@@ -231,6 +253,7 @@ const statistics = ref({
 })
 const searchKeyword = ref('')
 const currentTypeFilter = ref('all')
+const currentModeFilter = ref('all')
 const changeTypeDialogVisible = ref(false)
 const changeTypeForm = ref({
   errorId: null,
@@ -273,6 +296,23 @@ const getErrorTagType = (errorType) => {
   }
   return 'warning' // 橙色
 }
+
+const getPracticeMode = (error) => {
+  if (error?.session_mode === 'user_l2' || error?.session_mode === 'llm_l2') return error.session_mode
+  if (error?.source_role === 'llm') return 'llm_l2'
+  if (error?.source_role === 'user') return 'user_l2'
+  return ''
+}
+
+const getPracticeModeLabel = (error) => {
+  const mode = getPracticeMode(error)
+  if (mode === 'llm_l2') return t('grammar.llmL2Mode')
+  if (mode === 'user_l2') return t('grammar.userL2Mode')
+  return t('grammar.unknownMode')
+}
+
+const shouldShowIntendedMeaning = (error) => getPracticeMode(error) === 'llm_l2'
+const shouldShowSuggestion = (error) => getPracticeMode(error) !== 'llm_l2'
 
 const getSeverityTagType = (errorType) => {
   if (errorType === '无明显语用失误') return 'success'
@@ -318,10 +358,12 @@ const filteredErrors = computed(() => {
   const keyword = searchKeyword.value.toLowerCase()
   return errors.value.filter(e =>
       String(e.original_text || '').toLowerCase().includes(keyword) ||
+      String(e.conversation_summary || '').toLowerCase().includes(keyword) ||
       String(e.llm_intended_meaning || '').toLowerCase().includes(keyword) ||
       String(e.llm_suggestion || '').toLowerCase().includes(keyword) ||
       String(e.llm_explanation || '').toLowerCase().includes(keyword) ||
-      getSourceRoleLabel(e.source_role).toLowerCase().includes(keyword)
+      getSourceRoleLabel(e.source_role).toLowerCase().includes(keyword) ||
+      getPracticeModeLabel(e).toLowerCase().includes(keyword)
   )
 })
 
@@ -348,9 +390,9 @@ onMounted(async () => {
   await loadErrors()
 })
 
-const loadErrors = async (errorType = 'all') => {
+const loadErrors = async (errorType = currentTypeFilter.value, sessionMode = currentModeFilter.value) => {
   try {
-    const response = await api.getGrammarErrors(errorType)
+    const response = await api.getGrammarErrors(errorType, sessionMode)
     // 每条记录代表一次真实会话/消息事件；文本相同不等于重复记录。
     errors.value = response.errors || []
     statistics.value = response.statistics || {
@@ -366,7 +408,11 @@ const loadErrors = async (errorType = 'all') => {
 }
 
 const handleTypeChange = async (value) => {
-  await loadErrors(value)
+  await loadErrors(value, currentModeFilter.value)
+}
+
+const handleModeChange = async (value) => {
+  await loadErrors(currentTypeFilter.value, value)
 }
 
 const handleCommand = (command, error) => {
@@ -390,7 +436,7 @@ const confirmChangeType = async () => {
     await api.updateGrammarErrorType(changeTypeForm.value.errorId, changeTypeForm.value.newType)
     ElMessage.success(t('grammar.updateTypeSuccess'))
     changeTypeDialogVisible.value = false
-    await loadErrors(currentTypeFilter.value)
+    await loadErrors(currentTypeFilter.value, currentModeFilter.value)
   } catch (error) {
     console.error('Update type error:', error)
     if (!error?.pfchatNotified) ElMessage.error(t('grammar.updateTypeFailed'))
@@ -411,7 +457,7 @@ const deleteError = async (id) => {
 
     await api.deleteGrammarError(id)
     ElMessage.success(t('grammar.deleteSuccess'))
-    await loadErrors(currentTypeFilter.value)
+    await loadErrors(currentTypeFilter.value, currentModeFilter.value)
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Delete error:', error)
@@ -434,9 +480,9 @@ const clearCurrentType = async () => {
         }
     )
 
-    await api.clearGrammarErrors(currentTypeFilter.value)
+    await api.clearGrammarErrors(currentTypeFilter.value, currentModeFilter.value)
     ElMessage.success(t('grammar.clearSuccess'))
-    await loadErrors(currentTypeFilter.value)
+    await loadErrors(currentTypeFilter.value, currentModeFilter.value)
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Clear type error:', error)
@@ -457,9 +503,9 @@ const clearAll = async () => {
         }
     )
 
-    await api.clearGrammarErrors('all')
+    await api.clearGrammarErrors('all', currentModeFilter.value)
     ElMessage.success(t('grammar.clearSuccess'))
-    await loadErrors(currentTypeFilter.value)
+    await loadErrors(currentTypeFilter.value, currentModeFilter.value)
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Clear all error:', error)
@@ -541,6 +587,7 @@ const formatDate = (dateString) => {
   display: flex;
   gap: 15px;
   margin-bottom: 30px;
+  flex-wrap: wrap;
 }
 
 .error-groups {
@@ -670,6 +717,19 @@ const formatDate = (dateString) => {
   border-radius: 4px;
   color: #337ecc;
   line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.conversation-summary-section {
+  background: #f7f5ff;
+}
+
+.conversation-summary-text {
+  padding: 12px 15px;
+  border-left: 4px solid #8b5cf6;
+  border-radius: 4px;
+  color: #5b4b8a;
+  line-height: 1.7;
   white-space: pre-wrap;
 }
 

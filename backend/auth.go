@@ -14,8 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var jwtSecret = []byte("your-secret-key-change-in-production")
-
 type Claims struct {
 	UserID   uint   `json:"user_id"`
 	Username string `json:"username"`
@@ -139,6 +137,10 @@ func login(c *gin.Context) {
 
 // 生成 JWT token
 func generateToken(userID uint, username, role string) (string, error) {
+	jwtSecret, err := getJWTSecret()
+	if err != nil {
+		return "", err
+	}
 	claims := Claims{
 		UserID:   userID,
 		Username: username,
@@ -196,6 +198,10 @@ func authMiddleware() gin.HandlerFunc {
 }
 
 func parseTokenClaims(tokenString string) (*Claims, error) {
+	jwtSecret, err := getJWTSecret()
+	if err != nil {
+		return nil, err
+	}
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(
 		tokenString,
@@ -207,6 +213,17 @@ func parseTokenClaims(tokenString string) (*Claims, error) {
 		return nil, fmt.Errorf("invalid token")
 	}
 	return claims, nil
+}
+
+func getJWTSecret() ([]byte, error) {
+	secret, err := requireEnv("JWT_SECRET")
+	if err != nil {
+		return nil, err
+	}
+	if len([]byte(secret)) < 32 {
+		return nil, fmt.Errorf("JWT_SECRET must contain at least 32 bytes")
+	}
+	return []byte(secret), nil
 }
 
 // 管理员权限中间件

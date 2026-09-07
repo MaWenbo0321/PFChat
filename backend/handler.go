@@ -45,7 +45,8 @@ func getUserInfo(c *gin.Context) {
 
 // GetGrammarErrorsRequest 获取语法错误请求
 type GetGrammarErrorsRequest struct {
-	ErrorType string `form:"error_type"` // 错误类型筛选: "错误1", "错误2", "all"
+	ErrorType   string `form:"error_type"`   // 错误类型筛选
+	SessionMode string `form:"session_mode"` // user_l2 / llm_l2 / all
 }
 
 // GetGrammarErrorsResponse 获取语法错误响应
@@ -83,6 +84,13 @@ func getGrammarErrors(c *gin.Context) {
 		}
 		query = query.Where("error_type = ?", req.ErrorType)
 	}
+	if req.SessionMode != "" && req.SessionMode != "all" {
+		if !isValidSessionModeFilter(req.SessionMode) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的练习者类型"})
+			return
+		}
+		query = query.Where("session_mode = ?", req.SessionMode)
+	}
 
 	// 获取错误记录
 	var errors []GrammarError
@@ -92,7 +100,7 @@ func getGrammarErrors(c *gin.Context) {
 	}
 
 	// 获取统计信息
-	statistics, err := getGrammarErrorStatistics(userID)
+	statistics, err := getGrammarErrorStatistics(userID, req.SessionMode)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取错误统计失败"})
 		return
@@ -104,12 +112,24 @@ func getGrammarErrors(c *gin.Context) {
 	})
 }
 
+func isValidSessionModeFilter(mode string) bool {
+	return mode == ModeUserL2 || mode == ModeLLML2
+}
+
 // 获取语法错误统计信息
-func getGrammarErrorStatistics(userID uint) (GrammarErrorStatistics, error) {
+func grammarErrorStatisticsQuery(userID uint, sessionMode string) *gorm.DB {
+	query := db.Model(&GrammarError{}).Where("user_id = ?", userID)
+	if isValidSessionModeFilter(sessionMode) {
+		query = query.Where("session_mode = ?", sessionMode)
+	}
+	return query
+}
+
+func getGrammarErrorStatistics(userID uint, sessionMode string) (GrammarErrorStatistics, error) {
 	var statistics GrammarErrorStatistics
 
 	// 总数
-	if err := db.Model(&GrammarError{}).Where("user_id = ?", userID).Count(&statistics.Total).Error; err != nil {
+	if err := grammarErrorStatisticsQuery(userID, sessionMode).Count(&statistics.Total).Error; err != nil {
 		return statistics, err
 	}
 
@@ -119,9 +139,8 @@ func getGrammarErrorStatistics(userID uint) (GrammarErrorStatistics, error) {
 		ErrorType string
 		Count     int
 	}
-	if err := db.Model(&GrammarError{}).
+	if err := grammarErrorStatisticsQuery(userID, sessionMode).
 		Select("error_type, COUNT(*) as count").
-		Where("user_id = ?", userID).
 		Group("error_type").
 		Scan(&typeStats).Error; err != nil {
 		return statistics, err
@@ -132,15 +151,15 @@ func getGrammarErrorStatistics(userID uint) (GrammarErrorStatistics, error) {
 	}
 
 	// 今日错误数
-	if err := db.Model(&GrammarError{}).
-		Where("user_id = ? AND DATE(created_at) = CURDATE()", userID).
+	if err := grammarErrorStatisticsQuery(userID, sessionMode).
+		Where("DATE(created_at) = CURDATE()").
 		Count(&statistics.TodayCount).Error; err != nil {
 		return statistics, err
 	}
 
 	// 本周错误数
-	if err := db.Model(&GrammarError{}).
-		Where("user_id = ? AND YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)", userID).
+	if err := grammarErrorStatisticsQuery(userID, sessionMode).
+		Where("YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)").
 		Count(&statistics.WeekCount).Error; err != nil {
 		return statistics, err
 	}
@@ -199,10 +218,20 @@ func batchDeleteGrammarErrors(c *gin.Context) {
 func clearGrammarErrorsByType(c *gin.Context) {
 	userID := getCurrentUserID(c)
 	errorType := c.Param("type")
+	sessionMode := c.Query("session_mode")
+	if sessionMode != "" && sessionMode != "all" && !isValidSessionModeFilter(sessionMode) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的练习者类型"})
+		return
+	}
+
+	query := db.Where("user_id = ?", userID)
+	if sessionMode != "" && sessionMode != "all" {
+		query = query.Where("session_mode = ?", sessionMode)
+	}
 
 	if errorType == "" || errorType == "all" {
-		// 清空所有记录
-		result := db.Where("user_id = ?", userID).Delete(&GrammarError{})
+		// 清空筛选范围内的全部记录
+		result := query.Delete(&GrammarError{})
 		if result.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "清空失败"})
 			return
@@ -217,7 +246,7 @@ func clearGrammarErrorsByType(c *gin.Context) {
 			return
 		}
 		// 清空指定类型的记录
-		result := db.Where("user_id = ? AND error_type = ?", userID, errorType).Delete(&GrammarError{})
+		result := query.Where("error_type = ?", errorType).Delete(&GrammarError{})
 		if result.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "清空失败"})
 			return
