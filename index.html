@@ -1,0 +1,58 @@
+import { getSDK } from '@openim/wasm-client-sdk';
+
+const IMSDK = getSDK({
+  coreWasmPath: "./openIM.wasm";
+  sqlWasmPath: "/sql-wasm.wasm";
+  debug: true; // false不打印日志
+});
+
+import { getSDK, CbEvents } from '@openim/wasm-client-sdk';
+
+const IMSDK = getSDK();
+
+IMSDK.on(CbEvents.OnConnecting, () => {
+  // 连接中
+})
+IMSDK.on(CbEvents.OnConnectSuccess, () => {
+  // 连接成功
+})
+IMSDK.on(CbEvents.OnConnectFailed, () => {
+  // 连接失败
+})
+IMSDK.on(CbEvents.OnUserTokenExpired, () => {
+  // token无效
+})
+
+IMSDK.login({
+    userID: string;       // IM 用户 userID
+    token: string;        // IM 用户令牌
+    platformID: number;   // 当前登录平台号，web端为5
+    apiAddr: string;   // IM api 地址，一般为`http://your-server-ip:10002`
+    wsAddr: string;    // IM ws 地址，一般为`ws://your-server-ip:10001`
+})
+  .then(() => {
+    // 登录完成
+  })
+  .catch(({ errCode, errMsg }) => {
+    // 登录失败
+  });
+
+  import { getSDK, CbEvents } from '@openim/wasm-client-sdk';
+
+const IMSDK = getSDK();
+
+IMSDK.on(CbEvents.OnRecvNewMessages, ({ data: messages }) => {
+  // 收到新消息
+})
+
+const { data: message } = await IMSDK.createTextMessage('hello openim')
+
+IMSDK.sendMessage({
+  recvID: string; // 接收方ID
+  groupID: string; // 群聊ID
+  message: message; // 要发送的消息体
+}).then(({data:succeedMessage}) => {
+  // 发送成功 succeedMessage为发送成功后完整的消息体
+}).catch(({ errCode, errMsg }) => {
+  // 发送失败
+})

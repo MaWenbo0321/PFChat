@@ -18,7 +18,7 @@ import (
 const (
 	dashScopeDefaultAPIURL  = "https://llm-26cli7e69esmbtok.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 	dashScopeGenerationPath = "/services/aigc/multimodal-generation/generation"
-	defaultModel            = "qwen3.7-plus"
+	defaultModel            = "qwen3.8-flash"
 	fallbackDashScopeAPIKey = "sk-8ab77da79b894ba6beb61c9190c74602"
 )
 
