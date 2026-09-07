@@ -190,7 +190,7 @@ func normalizeGrammarCheckResult(result *GrammarCheckResponse) {
 		return
 	}
 
-	result.IntendedMeaning = strings.TrimSpace(result.IntendedMeaning)
+	result.IntendedMeaning = sanitizeIntendedMeaning(result.IntendedMeaning)
 	result.Suggestion = strings.TrimSpace(result.Suggestion)
 	result.Explanation = strings.TrimSpace(result.Explanation)
 	result.ErrorType = strings.TrimSpace(result.ErrorType)
@@ -238,6 +238,39 @@ func normalizeGrammarCheckResult(result *GrammarCheckResponse) {
 		result.Impoliteness = false
 		result.LinguisticPragmaticFailure = false
 		result.SocialPragmaticFailure = false
+	}
+}
+
+// sanitizeIntendedMeaning keeps storage/UI labels out of the structured value.
+// The prompt discourages labels, while this normalization is the final safeguard
+// before per-turn or session-level feedback is persisted.
+func sanitizeIntendedMeaning(value string) string {
+	prefixes := []string{
+		"说话者可能想表达：",
+		"说话者可能想表达:",
+		"说话者可能意图：",
+		"说话者可能意图:",
+		"可能意图：",
+		"可能意图:",
+		"Likely intended meaning:",
+		"Likely intended meaning：",
+		"Likely speaker intent:",
+		"Likely speaker intent：",
+	}
+
+	result := strings.TrimSpace(value)
+	for {
+		previous := result
+		result = strings.TrimLeft(result, " \t\r\n>*_#-")
+		for _, prefix := range prefixes {
+			if len(result) >= len(prefix) && strings.EqualFold(result[:len(prefix)], prefix) {
+				result = strings.TrimSpace(result[len(prefix):])
+				break
+			}
+		}
+		if result == previous {
+			return result
+		}
 	}
 }
 
@@ -294,6 +327,11 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("- 国家/地区和母语只是背景信息，不是文化归因的充分证据。只有当前对话明确给出个人文化经历，或上下文提供了具体且可验证的文化惯例时，才可用‘可能与……有关’的有限表述；否则应在措辞、个人习惯、二语迁移和关系层面解释。\n")
 		sb.WriteString("- 禁止使用‘某国文化就是……’‘某国人通常……’或‘这是某国文化中的习惯’等群体概括，不得根据国籍推断道德观、礼貌程度或行为动机。\n")
 		sb.WriteString("- 如果当前消息本身在没有对话证据的情况下，用‘在某国这很礼貌’等说法概括整个国家/文化，应将其视为可能误导听者的社会语用问题，而不能因为角色来自该国家就放过。\n")
+		sb.WriteString("- 只有角色配置的母语/主要语言与某种迁移分析相符，并且当前措辞提供了可观察的直接证据时，才能提出具体语言迁移；否则只能写‘可能的二语措辞/迁移’，不得使用‘中式英语’‘日式英语’等国别标签。\n")
+		sb.WriteString("- 除非是在准确引用待分析原话，不得提及角色配置之外的其他国家、地区或母语。\n")
+		sb.WriteString("- 修改无依据的群体概括时，suggestion 必须完全移除群体判断；把‘所有某国人’弱化成‘某国人通常/往往’仍不合格。\n")
+		sb.WriteString("- 未知的动机、原因、责任、经历、期限和承诺也属于未知事实；不得在 intended_meaning、suggestion 或 explanation 中擅自补全。\n")
+		sb.WriteString("- suggestion 必须保持原话的事实条件和立场，不能把一个立场或要求改写成推测原因。例如把‘不讨论’改成‘我没有时间讨论’会新增原因，禁止这样改写。\n")
 		sb.WriteString("- 不要因为学习者表达不够地道就标记错误；只有可能造成冒犯、误解、请求/拒绝/感谢/道歉不当或关系失衡时才标记。\n")
 		sb.WriteString("- 只评价当前分析对象，不把历史消息中的问题归因到当前消息。\n")
 		sb.WriteString("- llm_l2 模式中，LLM Bot 会适当模拟二语学习者的语用问题；如果当前分析对象是 LLM Bot 回复，请识别其故意触发的语用失误。\n")
@@ -304,7 +342,7 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("- 两者均为 true 时，error_type 必须是‘语用语言失误和社会语用失误’；两者均为 false 时，has_error 必须为 false 且 error_type 留空。\n")
 		sb.WriteString("- explanation 不得声称存在布尔字段未标记的错误类型；输出前必须检查布尔字段、error_type 和 explanation 完全一致。\n\n")
 		if current.Role == ErrorSourceLLM {
-			sb.WriteString("重要说明: 当前被分析对象是 LLM Bot 模拟的第二语言说话者。intended_meaning 必须单独写给 Human Listener，用中性、非断言语气说明说话者可能想完成的交际意图；explanation 再说明实际措辞可能让听者如何理解、为什么它是一个训练样例，以及听者可以观察到什么。不要用‘你应该……’对 LLM Bot 说教。如果 Human Listener 是当前语言的母语或熟练使用者，这项意图释义尤其重要；不得仅凭国家/地区推断其母语身份，无法确认时仍可提供释义，但应使用‘可能’‘看起来’等限定语。\n\n")
+			sb.WriteString("重要说明: 当前被分析对象是 LLM Bot 模拟的第二语言说话者。intended_meaning 必须单独写给 Human Listener，用中性、非断言语气说明说话者可能想完成的交际意图；该字段只能包含意图释义本身，不得带‘说话者可能想表达：’‘可能意图：’等字段名或前缀。explanation 再说明实际措辞可能让听者如何理解、为什么它是一个训练样例，以及听者可以观察到什么。不要用‘你应该……’对 LLM Bot 说教。如果 Human Listener 是当前语言的母语或熟练使用者，这项意图释义尤其重要；不得仅凭国家/地区推断其母语身份，无法确认时仍可提供释义，但应使用‘可能’‘看起来’等限定语。\n\n")
 		}
 
 		sb.WriteString("字段含义:\n")
@@ -343,6 +381,11 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("- Country/region and native language are context, not sufficient evidence for cultural attribution. Mention culture only when the conversation states a personal cultural experience or the context supplies a specific, verifiable convention; use bounded wording such as ‘may be related to’. Otherwise explain the issue at the wording, individual-habit, L2-transfer, and relationship levels.\n")
 		sb.WriteString("- Do not make group claims such as ‘people from X usually...’ or ‘this is an X-cultural habit’, and never infer morality, politeness, or behavioral motives from nationality.\n")
 		sb.WriteString("- If the current message itself makes an unsupported national or cultural generalization such as ‘In country X, this is polite’, treat it as a potential sociopragmatic problem that can mislead the listener; do not excuse it because the role comes from that country.\n")
+		sb.WriteString("- Name a specific language transfer only when it matches the role's configured native/main language and the current wording supplies direct observable evidence. Otherwise use a neutral phrase such as ‘possible L2 wording/transfer’; never label it ‘Chinese English’, ‘Japanese English’, or another national variety.\n")
+		sb.WriteString("- Do not mention a country, region, or native language different from the configured role unless accurately quoting the source message.\n")
+		sb.WriteString("- A suggestion that repairs an unsupported group claim must remove the group judgment entirely. Changing ‘all people from X’ to ‘people from X often/usually’ is still unacceptable.\n")
+		sb.WriteString("- Unknown motives, causes, responsibility, experiences, deadlines, and commitments are also unknown facts. Do not fill them in within intended_meaning, suggestion, or explanation.\n")
+		sb.WriteString("- The suggestion must preserve the source message's truth conditions and stance; never replace a stance or request with an inferred reason. For example, changing ‘No discussion’ to ‘I do not have time to discuss’ invents a cause and is forbidden.\n")
 		sb.WriteString("- Do not flag a message merely because it is non-native or not idiomatic; flag only likely offense, misunderstanding, inappropriate requests/refusals/thanks/apologies, or relationship mismatch.\n")
 		sb.WriteString("- Evaluate only the current analysis target; do not attribute issues in previous messages to the current message.\n")
 		sb.WriteString("- In llm_l2 mode, the LLM bot may appropriately simulate L2 pragmatic problems; if the current analysis target is an LLM Bot reply, identify the intentionally triggered pragmatic failure.\n")
@@ -353,7 +396,7 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("- If both are true, error_type must be ‘语用语言失误和社会语用失误’. If both are false, has_error must be false and error_type must be empty.\n")
 		sb.WriteString("- The explanation must not claim an error category whose boolean is false. Before output, verify that the booleans, error_type, and explanation agree exactly.\n\n")
 		if current.Role == ErrorSourceLLM {
-			sb.WriteString("Important: the current target is an LLM Bot simulating an L2 speaker. Write intended_meaning as a separate field for the Human Listener, neutrally and tentatively paraphrasing the communicative intention the speaker may have meant. Use explanation only for how the actual wording may be interpreted, why it works as a training sample, and what the listener can observe. Do not lecture the LLM Bot with ‘you should...’. This intended-meaning paraphrase is especially important when the Human Listener is a native or proficient speaker of the current language. Never infer native-speaker status from country/region alone; if proficiency is uncertain, still offer the paraphrase using qualifiers such as ‘may mean’ or ‘appears to be trying to’.\n\n")
+			sb.WriteString("Important: the current target is an LLM Bot simulating an L2 speaker. Write intended_meaning as a separate field for the Human Listener, neutrally and tentatively paraphrasing the communicative intention the speaker may have meant. This field must contain only the paraphrase itself, never a label or prefix such as ‘Likely intended meaning:’. Use explanation only for how the actual wording may be interpreted, why it works as a training sample, and what the listener can observe. Do not lecture the LLM Bot with ‘you should...’. This intended-meaning paraphrase is especially important when the Human Listener is a native or proficient speaker of the current language. Never infer native-speaker status from country/region alone; if proficiency is uncertain, still offer the paraphrase using qualifiers such as ‘may mean’ or ‘appears to be trying to’.\n\n")
 		}
 
 		sb.WriteString("Field meanings:\n")
@@ -414,12 +457,12 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("如果没有语用失误，返回:\n")
 		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"error_type\": \"\", \"intended_meaning\": \"\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
 		sb.WriteString(fmt.Sprintf("输出语言要求: intended_meaning 和 explanation 必须使用%s；suggestion 必须使用%s，并且只包含一个最佳修改句。suggestion 只能调整措辞，不得新增或改变原消息中的原因、责任、时间、承诺或其他事实。\n", explanationLang, suggestionLang))
-		sb.WriteString("如果 has_error 为 false，intended_meaning、suggestion 和 explanation 必须为空字符串。\n")
+		sb.WriteString("如果 has_error 为 false，intended_meaning、suggestion 和 explanation 必须为空字符串。输出前核对人物国家/地区、母语、关系和已知事实，并确保布尔分类、error_type、suggestion 与 explanation 相互一致。\n")
 	} else {
 		sb.WriteString("If no pragmatic failure is detected, return:\n")
 		sb.WriteString("{\"has_error\": false, \"impoliteness\": false, \"linguistic_pragmatic_failure\": false, \"social_pragmatic_failure\": false, \"overall_evaluation\": \"good\", \"error_type\": \"\", \"intended_meaning\": \"\", \"suggestion\": \"\", \"explanation\": \"\"}\n\n")
 		sb.WriteString(fmt.Sprintf("Output language requirements: intended_meaning and explanation must be in %s; suggestion must be in %s and contain only one best revised sentence. The suggestion may improve wording only and must not add or change causes, responsibility, timing, commitments, or any other fact from the original message.\n", explanationLang, suggestionLang))
-		sb.WriteString("If has_error is false, intended_meaning, suggestion, and explanation must be empty strings.\n")
+		sb.WriteString("If has_error is false, intended_meaning, suggestion, and explanation must be empty strings. Before output, verify the role's country/region, native language, relationship, and known facts, then ensure the classification booleans, error_type, suggestion, and explanation are mutually consistent.\n")
 	}
 
 	return sb.String()
