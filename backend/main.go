@@ -98,17 +98,16 @@ func main() {
 
 func initDB() {
 	var err error
-	mysqlConfig := mysqldriver.Config{
-		User:      envValue("MYSQL_USER"),
-		Passwd:    envValue("MYSQL_PASSWORD"),
-		Net:       "tcp",
-		Addr:      net.JoinHostPort(envValueOrDefault("MYSQL_HOST", "127.0.0.1"), envValueOrDefault("MYSQL_PORT", "3306")),
-		DBName:    envValue("MYSQL_DATABASE"),
-		ParseTime: true,
-		Loc:       time.Local,
-		Params: map[string]string{
-			"charset": "utf8mb4",
-		},
+	mysqlConfig := mysqldriver.NewConfig()
+	mysqlConfig.User = envValue("MYSQL_USER")
+	mysqlConfig.Passwd = envValue("MYSQL_PASSWORD")
+	mysqlConfig.Net = "tcp"
+	mysqlConfig.Addr = net.JoinHostPort(envValueOrDefault("MYSQL_HOST", "127.0.0.1"), envValueOrDefault("MYSQL_PORT", "3306"))
+	mysqlConfig.DBName = envValue("MYSQL_DATABASE")
+	mysqlConfig.ParseTime = true
+	mysqlConfig.Loc = time.Local
+	mysqlConfig.Params = map[string]string{
+		"charset": "utf8mb4",
 	}
 	db, err = gorm.Open(gormmysql.Open(mysqlConfig.FormatDSN()), &gorm.Config{})
 	if err != nil {
