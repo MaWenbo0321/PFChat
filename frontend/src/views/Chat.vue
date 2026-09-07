@@ -144,11 +144,18 @@
               <div v-if="aiSuggestionsEnabled && messageErrors[msg.id]" class="message-error-badge">
                 <el-popover
                   placement="top"
-                  :width="300"
+                  width="min(420px, calc(100vw - 32px))"
                   trigger="click"
                 >
                   <template #reference>
-                    <span class="error-indicator" :class="getErrorClass(messageErrors[msg.id].error_type)">
+                    <span
+                      class="error-indicator"
+                      :class="getErrorClass(messageErrors[msg.id].error_type)"
+                      role="button"
+                      tabindex="0"
+                      :aria-label="`${getErrorTypeShort(messageErrors[msg.id].error_type)}：${$t('chat.viewFeedback')}`"
+                      @keydown.enter.space.prevent="$event.currentTarget.click()"
+                    >
                       <el-icon :size="12"><WarningFilled /></el-icon>
                       {{ getErrorTypeShort(messageErrors[msg.id].error_type) }}
                     </span>
@@ -158,6 +165,10 @@
                       <el-tag size="small" :type="isProblematicType(messageErrors[msg.id].error_type) ? 'danger' : 'warning'">
                         {{ messageErrors[msg.id].error_type }}
                       </el-tag>
+                    </div>
+                    <div v-if="messageErrors[msg.id].intended_meaning" class="error-popover-section">
+                      <div class="error-popover-label">{{ $t('chat.intendedMeaning') }}</div>
+                      <div class="error-popover-text intended-meaning-text">{{ messageErrors[msg.id].intended_meaning }}</div>
                     </div>
                     <div v-if="messageErrors[msg.id].suggestion" class="error-popover-section">
                       <div class="error-popover-label">{{ $t('chat.suggestion') }}</div>
@@ -192,6 +203,7 @@
               v-model="messageInput"
               class="input-editor"
               :placeholder="getInputPlaceholder()"
+              :aria-label="getInputPlaceholder()"
               @keydown.ctrl.enter="sendMessage"
               :disabled="isSending || showTurnFeedback || !sessionActive"
             ></textarea>
@@ -204,6 +216,7 @@
                   type="primary"
                   :icon="Promotion"
                   @click="sendMessage"
+                  :loading="isSending"
                   :disabled="!messageInput.trim() || isSending || showTurnFeedback || !sessionStore.currentSession || !sessionActive"
                   size="small"
                 >
@@ -220,7 +233,7 @@
     <el-dialog
       v-model="showTurnFeedback"
       :title="$t('feedback.turnTitle', { round: sessionStore.currentSession?.round_count || 0 })"
-      width="min(600px, 92vw)"
+      width="min(720px, 94vw)"
       :close-on-click-modal="false"
       @closed="focusInput"
     >
@@ -240,6 +253,10 @@
           <div class="error-popover-section">
             <div class="error-popover-label">{{ $t('chat.errorType') }}</div>
             <el-tag :type="isProblematicType(turnFeedback.check.error_type) ? 'danger' : 'warning'">{{ turnFeedback.check.error_type }}</el-tag>
+          </div>
+          <div v-if="turnFeedback.check.intended_meaning" class="error-popover-section feedback-section">
+            <div class="error-popover-label">{{ $t('chat.intendedMeaning') }}</div>
+            <div class="turn-feedback-text intended-meaning-text">{{ turnFeedback.check.intended_meaning }}</div>
           </div>
           <div class="error-popover-section">
             <div class="error-popover-label">{{ $t('chat.suggestion') }}</div>
@@ -544,7 +561,11 @@ const sendMessage = async () => {
         if (!messageErrors.value[message.id]) errorCount.value++
         messageErrors.value[message.id] = check
       }
-      showTurnFeedback.value = true
+      if (!check || check.has_error) {
+        showTurnFeedback.value = true
+      } else {
+        ElMessage.success(t('feedback.noIssue'))
+      }
     }
 
   } catch (error) {
@@ -560,6 +581,10 @@ const sendMessage = async () => {
   } finally {
     isSending.value = false
     isLLMTyping.value = false
+    if (!showTurnFeedback.value && sessionActive.value) {
+      await nextTick()
+      focusInput()
+    }
     if (autoEndPending && sessionActive.value && sessionStore.currentSession) {
       autoEndPending = false
       await autoEndSession()
@@ -829,6 +854,7 @@ watch(() => sessionStore.messages.length, async () => {
 .turn-feedback-content {
   max-height: 60vh;
   overflow-y: auto;
+  padding: 2px 4px 2px 0;
 }
 
 .turn-feedback-text {
@@ -841,6 +867,16 @@ watch(() => sessionStore.messages.length, async () => {
 .turn-feedback-hint {
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+
+.turn-feedback-target {
+  margin: 12px 0;
+  line-height: 1.5;
+}
+
+.turn-feedback-hint {
+  margin: 14px 0 0;
+  line-height: 1.5;
 }
 
 .chat-container {
@@ -1202,13 +1238,14 @@ watch(() => sessionStore.messages.length, async () => {
 }
 
 .error-popover-section {
-  margin-bottom: 8px;
+  margin: 0 0 14px;
 }
 
 .error-popover-label {
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
   color: #909399;
-  margin-bottom: 3px;
+  margin-bottom: 6px;
 }
 
 .error-popover-text {
@@ -1221,6 +1258,13 @@ watch(() => sessionStore.messages.length, async () => {
   padding: 4px 8px;
   background: #f0f9eb;
   border-radius: 4px;
+}
+
+.intended-meaning-text {
+  color: #337ecc;
+  padding: 8px 10px;
+  background: #ecf5ff;
+  border-radius: 6px;
 }
 
 /* ===================== 输入区域 ===================== */
@@ -1335,5 +1379,73 @@ watch(() => sessionStore.messages.length, async () => {
   gap: 8px;
   padding: 24px;
   color: #909399;
+}
+
+@media (max-width: 768px) {
+  .chat-container {
+    height: 100dvh;
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    max-height: 220px;
+    flex: 0 0 auto;
+    overflow-y: auto;
+    border-right: none;
+    border-bottom: 1px solid #e4e7ed;
+  }
+
+  .sidebar-header,
+  .session-info {
+    padding: 10px 12px;
+  }
+
+  .session-info-title {
+    margin-bottom: 8px;
+  }
+
+  .session-info-item {
+    display: inline-flex;
+    margin: 0 12px 6px 0;
+  }
+
+  .session-actions {
+    flex-direction: row;
+  }
+
+  .error-stats {
+    padding: 8px 12px;
+  }
+
+  .chat-area,
+  .chat-content {
+    min-height: 0;
+  }
+
+  .chat-content {
+    height: auto;
+    flex: 1;
+  }
+
+  .chat-header,
+  .messages-container,
+  .input-area {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .target-lang {
+    display: none;
+  }
+
+  .message {
+    max-width: 86%;
+  }
+
+  .input-editor {
+    min-height: 64px;
+  }
 }
 </style>

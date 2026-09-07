@@ -14,20 +14,34 @@
         <!-- 对话模式 -->
         <div class="section-title">{{ $t('setup.modeTitle') }}</div>
         <el-form-item prop="mode">
-          <div class="mode-cards">
+          <div class="mode-cards" role="radiogroup" :aria-label="$t('setup.modeTitle')">
             <div
+              ref="modeUserL2Ref"
               class="mode-card"
               :class="{ active: form.mode === 'user_l2' }"
+              role="radio"
+              :tabindex="form.mode === 'user_l2' ? 0 : -1"
+              :aria-checked="form.mode === 'user_l2'"
               @click="form.mode = 'user_l2'"
+              @keydown.enter.space.prevent="form.mode = 'user_l2'"
+              @keydown.left.up.prevent="selectModeWithFocus('llm_l2')"
+              @keydown.right.down.prevent="selectModeWithFocus('llm_l2')"
             >
               <el-icon :size="32" color="#409eff"><User /></el-icon>
               <div class="mode-card-title">{{ $t('setup.modeUserL2Title') }}</div>
               <div class="mode-card-desc">{{ $t('setup.modeUserL2Desc') }}</div>
             </div>
             <div
+              ref="modeLLML2Ref"
               class="mode-card"
               :class="{ active: form.mode === 'llm_l2' }"
+              role="radio"
+              :tabindex="form.mode === 'llm_l2' ? 0 : -1"
+              :aria-checked="form.mode === 'llm_l2'"
               @click="form.mode = 'llm_l2'"
+              @keydown.enter.space.prevent="form.mode = 'llm_l2'"
+              @keydown.left.up.prevent="selectModeWithFocus('user_l2')"
+              @keydown.right.down.prevent="selectModeWithFocus('user_l2')"
             >
               <el-icon :size="32" color="#67c23a"><Monitor /></el-icon>
               <div class="mode-card-title">{{ $t('setup.modeLLML2Title') }}</div>
@@ -93,20 +107,34 @@
         <template v-if="form.ai_suggestions_enabled">
         <div class="section-title feedback-method-title">{{ $t('setup.feedbackTitle') }}</div>
         <el-form-item prop="feedback_mode">
-          <div class="feedback-cards">
+          <div class="feedback-cards" role="radiogroup" :aria-label="$t('setup.feedbackTitle')">
             <div
+              ref="feedbackCompleteRef"
               class="feedback-card"
               :class="{ active: form.feedback_mode === 'complete' }"
+              role="radio"
+              :tabindex="form.feedback_mode === 'complete' ? 0 : -1"
+              :aria-checked="form.feedback_mode === 'complete'"
               @click="form.feedback_mode = 'complete'"
+              @keydown.enter.space.prevent="form.feedback_mode = 'complete'"
+              @keydown.left.up.prevent="selectFeedbackWithFocus('rounds_5')"
+              @keydown.right.down.prevent="selectFeedbackWithFocus('rounds_5')"
             >
               <el-icon :size="24" color="#409eff"><Document /></el-icon>
               <div class="feedback-card-title">{{ $t('setup.feedbackComplete') }}</div>
               <div class="feedback-card-desc">{{ $t('setup.feedbackCompleteDesc') }}</div>
             </div>
             <div
+              ref="feedbackRoundsRef"
               class="feedback-card"
               :class="{ active: form.feedback_mode === 'rounds_5' }"
+              role="radio"
+              :tabindex="form.feedback_mode === 'rounds_5' ? 0 : -1"
+              :aria-checked="form.feedback_mode === 'rounds_5'"
               @click="form.feedback_mode = 'rounds_5'"
+              @keydown.enter.space.prevent="form.feedback_mode = 'rounds_5'"
+              @keydown.left.up.prevent="selectFeedbackWithFocus('complete')"
+              @keydown.right.down.prevent="selectFeedbackWithFocus('complete')"
             >
               <el-icon :size="24" color="#67c23a"><Timer /></el-icon>
               <div class="feedback-card-title">{{ $t('setup.feedbackRounds5') }}</div>
@@ -126,14 +154,14 @@
           {{ $t('setup.startBtn') }}
         </el-button>
 
-        <div class="logout-link" @click="handleLogout">{{ $t('setup.logout') }}</div>
+        <div class="logout-link" role="button" tabindex="0" @click="handleLogout" @keydown.enter.space.prevent="handleLogout">{{ $t('setup.logout') }}</div>
       </el-form>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -149,6 +177,10 @@ const sessionStore = useSessionStore()
 const { t, locale } = useI18n()
 const loading = ref(false)
 const formRef = ref(null)
+const modeUserL2Ref = ref(null)
+const modeLLML2Ref = ref(null)
+const feedbackCompleteRef = ref(null)
+const feedbackRoundsRef = ref(null)
 const personaCountries = ref([])
 const personaCountriesLoading = ref(false)
 let personaCountriesRequest = 0
@@ -164,6 +196,20 @@ const form = ref({
 })
 
 const isZh = computed(() => locale.value === 'zh-CN')
+
+const selectModeWithFocus = async (mode) => {
+  form.value.mode = mode
+  await nextTick()
+  const target = mode === 'user_l2' ? modeUserL2Ref.value : modeLLML2Ref.value
+  target?.focus()
+}
+
+const selectFeedbackWithFocus = async (feedbackMode) => {
+  form.value.feedback_mode = feedbackMode
+  await nextTick()
+  const target = feedbackMode === 'complete' ? feedbackCompleteRef.value : feedbackRoundsRef.value
+  target?.focus()
+}
 
 const languages = computed(() => [
   { value: 'EN', label: isZh.value ? '英语 (English)' : 'English' },
@@ -362,7 +408,7 @@ const handleLogout = () => {
 
 .mode-card-desc {
   font-size: 12px;
-  color: #909399;
+  color: #606266;
   line-height: 1.5;
 }
 
@@ -393,7 +439,7 @@ const handleLogout = () => {
 
 .ai-suggestions-desc {
   margin-top: 5px;
-  color: #909399;
+  color: #606266;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -457,12 +503,6 @@ const handleLogout = () => {
   line-height: 1.5;
 }
 
-@media (max-width: 560px) {
-  .role-cards {
-    grid-template-columns: 1fr;
-  }
-}
-
 .feedback-card {
   border: 2px solid #dcdfe6;
   border-radius: 10px;
@@ -491,7 +531,7 @@ const handleLogout = () => {
 
 .feedback-card-desc {
   font-size: 12px;
-  color: #909399;
+  color: #606266;
   line-height: 1.5;
 }
 
@@ -502,7 +542,7 @@ const handleLogout = () => {
 .persona-hint {
   width: 100%;
   margin-top: 6px;
-  color: #909399;
+  color: #606266;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -533,5 +573,62 @@ const handleLogout = () => {
 
 :deep(.el-form-item__label) {
   font-weight: 500;
+}
+
+@media (max-width: 560px) {
+  .setup-container {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .locale-switcher-wrapper {
+    top: 16px;
+    right: 16px;
+  }
+
+  .setup-box {
+    padding: 24px 18px 18px;
+    border-radius: 12px;
+  }
+
+  .setup-header {
+    margin-bottom: 24px;
+    padding-right: 44px;
+  }
+
+  .mode-cards,
+  .feedback-cards,
+  .role-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .start-btn {
+    position: sticky;
+    bottom: 8px;
+    z-index: 5;
+    box-shadow: 0 8px 20px rgba(64, 158, 255, 0.3);
+  }
+}
+
+@media (max-height: 760px) and (min-width: 561px) {
+  .setup-container {
+    align-items: flex-start;
+  }
+
+  .setup-box {
+    padding: 28px 36px;
+  }
+
+  .setup-header {
+    margin-bottom: 20px;
+  }
+
+  .mode-card {
+    padding: 14px 12px;
+  }
+
+  :deep(.el-form-item) {
+    margin-bottom: 14px;
+  }
 }
 </style>

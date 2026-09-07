@@ -127,6 +127,14 @@
                     <div class="original-text">{{ error.original_text }}</div>
                   </div>
 
+                  <div v-if="error.llm_intended_meaning" class="section">
+                    <div class="section-title">
+                      <el-icon color="#409eff"><InfoFilled /></el-icon>
+                      {{ $t('grammar.intendedMeaning') }}
+                    </div>
+                    <div class="intended-meaning-text">{{ error.llm_intended_meaning }}</div>
+                  </div>
+
                   <div class="section">
                     <div class="section-title">
                       <el-icon color="#67c23a"><Check /></el-icon>
@@ -310,6 +318,7 @@ const filteredErrors = computed(() => {
   const keyword = searchKeyword.value.toLowerCase()
   return errors.value.filter(e =>
       String(e.original_text || '').toLowerCase().includes(keyword) ||
+      String(e.llm_intended_meaning || '').toLowerCase().includes(keyword) ||
       String(e.llm_suggestion || '').toLowerCase().includes(keyword) ||
       String(e.llm_explanation || '').toLowerCase().includes(keyword) ||
       getSourceRoleLabel(e.source_role).toLowerCase().includes(keyword)
@@ -652,6 +661,16 @@ const formatDate = (dateString) => {
   font-size: 14px;
   color: #606266;
   line-height: 1.6;
+}
+
+.intended-meaning-text {
+  padding: 12px 15px;
+  background: #ecf5ff;
+  border-left: 4px solid #409eff;
+  border-radius: 4px;
+  color: #337ecc;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 .deleted-notice {

@@ -1,6 +1,11 @@
 <template>
   <el-dropdown @command="handleCommand" trigger="click">
-    <el-button circle :icon="Location">
+    <el-button
+      circle
+      :icon="Location"
+      :aria-label="locale === 'zh-CN' ? '切换语言' : 'Switch language'"
+      :title="locale === 'zh-CN' ? '切换语言' : 'Switch language'"
+    >
       <span v-if="showText" class="locale-text">{{ currentLocaleName }}</span>
     </el-button>
     <template #dropdown>

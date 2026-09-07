@@ -79,6 +79,7 @@ type SendLLMMessageResponse struct {
 type PragmaticCheckResult struct {
 	HasError          bool   `json:"has_error"`
 	ErrorType         string `json:"error_type"`
+	IntendedMeaning   string `json:"intended_meaning"`
 	Suggestion        string `json:"suggestion"`
 	Explanation       string `json:"explanation"`
 	OverallEvaluation string `json:"overall_evaluation"`
@@ -241,15 +242,16 @@ func checkMessagePragmatics(userID uint, msg Message, session ConversationSessio
 	}
 
 	grammarError := GrammarError{
-		UserID:            userID,
-		SessionID:         session.ID,
-		MessageID:         msg.ID,
-		SourceRole:        sourceRole,
-		OriginalText:      msg.Content,
-		LLMSuggestion:     result.Suggestion,
-		LLMExplanation:    result.Explanation,
-		ErrorType:         errorType,
-		OverallEvaluation: overallEvaluation,
+		UserID:             userID,
+		SessionID:          session.ID,
+		MessageID:          msg.ID,
+		SourceRole:         sourceRole,
+		OriginalText:       msg.Content,
+		LLMIntendedMeaning: result.IntendedMeaning,
+		LLMSuggestion:      result.Suggestion,
+		LLMExplanation:     result.Explanation,
+		ErrorType:          errorType,
+		OverallEvaluation:  overallEvaluation,
 	}
 	var errorRecordID uint
 	if err := db.Create(&grammarError).Error; err != nil {
@@ -261,6 +263,7 @@ func checkMessagePragmatics(userID uint, msg Message, session ConversationSessio
 	return &PragmaticCheckResult{
 		HasError:          true,
 		ErrorType:         errorType,
+		IntendedMeaning:   result.IntendedMeaning,
 		Suggestion:        result.Suggestion,
 		Explanation:       result.Explanation,
 		OverallEvaluation: overallEvaluation,
@@ -389,7 +392,7 @@ func buildLLML2PromptWithResearch(session ConversationSession, history []Message
 	if research == nil || len(research.Examples) == 0 {
 		sb.WriteString("Silent example-retrieval step before each reply:\n")
 		sb.WriteString("- Use this internal-knowledge fallback only because verified web research is unavailable.\n")
-		sb.WriteString(fmt.Sprintf("- Retrieve 2-4 pragmatic-failure examples from your internal knowledge that fit a speaker from %s communicating with a user from %s.\n", learnerCulture, userCulture))
+		sb.WriteString(fmt.Sprintf("- Retrieve 2-4 pragmatic-failure examples from your internal knowledge that fit this individual L2 speaker (%s language background) communicating with a user whose context is %s. Treat both locations as context, never as personality or behavior rules.\n", learnerNativeLang, userCulture))
 		sb.WriteString(fmt.Sprintf("- Match the examples to the relationship %q, the topic %q, the current message, and communication in %s.\n", relationship, topic, targetLangFull))
 		sb.WriteString("- Select at most one fitting pattern and adapt it to the current turn. Use the examples as behavioral references; do not copy them verbatim.\n")
 		sb.WriteString("- Reject examples that depend on national stereotypes or do not fit the current turn. In that case, produce a natural reply without a forced pragmatic failure.\n")
@@ -398,6 +401,8 @@ func buildLLML2PromptWithResearch(session ConversationSession, history []Message
 
 	sb.WriteString("Instructions - simulate an intermediate L2 speaker for pragmatic-awareness training:\n")
 	sb.WriteString("- Keep the conversation natural and relevant to the user's message.\n")
+	sb.WriteString("- Stay in character. Never explain, diagnose, or justify your wording by saying ‘In my country/culture...’, ‘people from X...’, or similar national/cultural generalizations. Do not mention the role's country merely to explain a simulated error.\n")
+	sb.WriteString("- Only discuss a cultural practice when the user explicitly asks about it and the current context supports a specific, bounded answer; describe variation and avoid presenting a whole group as uniform.\n")
 	sb.WriteString("- Do not make every problem a social/cultural politeness problem. Use a balanced mix of pragmalinguistic and sociopragmatic issues across the session.\n")
 	sb.WriteString("- Pragmalinguistic patterns to use naturally: odd word order, poor word choice, reversed sentence parts, typo-like spelling or wrong character choice, missing small function words, awkward collocations, literal transfer from your native language, or expressions that make the speech act sound too blunt or unclear.\n")
 	sb.WriteString("- Sociopragmatic patterns to use occasionally: wrong politeness level, too much/too little mitigation, culturally unusual apology/thanks, awkward refusal, or mismatched distance/power expectations.\n")
@@ -657,12 +662,13 @@ type SessionPragmaticAnalysis struct {
 }
 
 type SessionPragmaticIssue struct {
-	SourceRole        string `json:"source_role"`
-	OriginalText      string `json:"original_text"`
-	ErrorType         string `json:"error_type"`
-	LLMSuggestion     string `json:"llm_suggestion"`
-	LLMExplanation    string `json:"llm_explanation"`
-	OverallEvaluation string `json:"overall_evaluation"`
+	SourceRole         string `json:"source_role"`
+	OriginalText       string `json:"original_text"`
+	ErrorType          string `json:"error_type"`
+	LLMIntendedMeaning string `json:"llm_intended_meaning"`
+	LLMSuggestion      string `json:"llm_suggestion"`
+	LLMExplanation     string `json:"llm_explanation"`
+	OverallEvaluation  string `json:"overall_evaluation"`
 }
 
 // generateAndStoreSessionFeedback 生成会话级反馈，并在会话彻底结束后只保存一条记录。
@@ -703,15 +709,16 @@ func replaceSessionFeedbackRecord(session ConversationSession, userID uint, mess
 	}
 
 	record := GrammarError{
-		UserID:            userID,
-		SessionID:         session.ID,
-		MessageID:         0,
-		SourceRole:        "session",
-		OriginalText:      buildSessionConversationText(session, messages),
-		LLMSuggestion:     buildSessionSuggestionText(analysis),
-		LLMExplanation:    buildSessionAnalysisText(analysis),
-		ErrorType:         getPrimarySessionErrorType(analysis.Issues),
-		OverallEvaluation: getSessionOverallEvaluation(analysis.Issues),
+		UserID:             userID,
+		SessionID:          session.ID,
+		MessageID:          0,
+		SourceRole:         "session",
+		OriginalText:       buildSessionConversationText(session, messages),
+		LLMIntendedMeaning: buildSessionIntendedMeaningText(analysis),
+		LLMSuggestion:      buildSessionSuggestionText(analysis),
+		LLMExplanation:     buildSessionAnalysisText(analysis),
+		ErrorType:          getPrimarySessionErrorType(analysis.Issues),
+		OverallEvaluation:  getSessionOverallEvaluation(analysis.Issues),
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("user_id = ? AND session_id = ? AND message_id = ?", userID, session.ID, 0).
@@ -732,6 +739,7 @@ func sanitizeSessionIssues(issues []SessionPragmaticIssue) []SessionPragmaticIss
 		issue.SourceRole = normalizeSessionIssueSourceRole(issue.SourceRole)
 		issue.OriginalText = strings.TrimSpace(issue.OriginalText)
 		issue.ErrorType = errorType
+		issue.LLMIntendedMeaning = strings.TrimSpace(issue.LLMIntendedMeaning)
 		issue.LLMSuggestion = strings.TrimSpace(issue.LLMSuggestion)
 		issue.LLMExplanation = strings.TrimSpace(issue.LLMExplanation)
 		if IsProblematicErrorType(errorType) {
@@ -831,6 +839,25 @@ func buildSessionSuggestionText(analysis *SessionPragmaticAnalysis) string {
 	return strings.TrimSpace(sb.String())
 }
 
+func buildSessionIntendedMeaningText(analysis *SessionPragmaticAnalysis) string {
+	if analysis == nil || len(analysis.Issues) == 0 {
+		return ""
+	}
+
+	var lines []string
+	for i, issue := range analysis.Issues {
+		meaning := strings.TrimSpace(issue.LLMIntendedMeaning)
+		if meaning == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%d. %s", i+1, meaning))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.Join(lines, "\n")
+}
+
 func buildSessionAnalysisText(analysis *SessionPragmaticAnalysis) string {
 	if analysis == nil {
 		return ""
@@ -858,6 +885,9 @@ func buildSessionAnalysisText(analysis *SessionPragmaticAnalysis) string {
 		sourceLabel := getErrorSourceLabel(normalizeSessionIssueSourceRole(issue.SourceRole), true)
 		sb.WriteString(fmt.Sprintf("%d. 来源: %s\n", i+1, sourceLabel))
 		sb.WriteString(fmt.Sprintf("   错误类型: %s\n", normalizeErrorType(issue.ErrorType)))
+		if strings.TrimSpace(issue.LLMIntendedMeaning) != "" {
+			sb.WriteString(fmt.Sprintf("   说话者可能意图: %s\n", issue.LLMIntendedMeaning))
+		}
 		if strings.TrimSpace(issue.OverallEvaluation) != "" {
 			sb.WriteString(fmt.Sprintf("   严重程度: %s\n", strings.TrimSpace(issue.OverallEvaluation)))
 		}
@@ -930,15 +960,17 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 
 	if session.Mode == ModeLLML2 {
 		if isZh {
-			sb.WriteString("LLM Speaker 是第二语言学习者。它的失误是训练样例：每条解释应先用中性、非断言语气说明说话者可能想完成的交际意图，再说明 Human Listener 可能如何理解、可以观察什么，不要对 LLM Speaker 说教。母语或熟练听者尤其需要这项意图释义；不得仅凭国家/地区推断母语身份，无法确认时仍可用‘可能’‘看起来’等限定语提供释义。\n")
+			sb.WriteString("LLM Speaker 是第二语言学习者。它的失误是训练样例：每个问题必须把可能意图单独写入 llm_intended_meaning，再在 llm_explanation 中说明 Human Listener 可能如何理解、可以观察什么，不要对 LLM Speaker 说教。母语或熟练听者尤其需要这项意图释义；不得仅凭国家/地区推断母语身份，无法确认时仍可用‘可能’‘看起来’等限定语提供释义。\n")
 			sb.WriteString("请优先从当前措辞、具体关系、角色的个人经历与个体弱点，以及可观察到的二语迁移解释问题。国家/地区和母语只是背景，不是文化归因的充分证据。\n")
 			sb.WriteString("请平衡识别语用语言失误和社会语用失误。除礼貌/关系误判外，也要关注自然的二语问题：语序错误、用词不当、句子成分颠倒、错别字/拼写近似、搭配生硬；只有这些影响意图、礼貌或理解时才列为语用语言失误。\n")
-			sb.WriteString("只有对话明确给出个人文化经历，或上下文提供具体且可验证的文化惯例时，才可用‘可能与……有关’的有限文化解释；否则在措辞、个人习惯、二语迁移和关系层面解释。禁止把某个国家/文化背景写成固定缺陷或群体习惯。\n\n")
+			sb.WriteString("只有对话明确给出个人文化经历，或上下文提供具体且可验证的文化惯例时，才可用‘可能与……有关’的有限文化解释；否则在措辞、个人习惯、二语迁移和关系层面解释。禁止把某个国家/文化背景写成固定缺陷或群体习惯；LLM Speaker 自己做出的无依据国家/文化概括也应作为潜在社会语用问题评估。\n")
+			sb.WriteString("llm_suggestion 只能改进表达方式，必须保留原话已有的原因、责任、时间、承诺和事实；不得为了显得更礼貌而编造新理由或转移责任。\n\n")
 		} else {
-			sb.WriteString("The LLM Speaker is an L2 learner. Its mistakes are training samples: each explanation must first neutrally and tentatively paraphrase the communicative intention the speaker may have meant, then describe how the Human Listener may interpret it and what to observe. Do not lecture the LLM Speaker. This paraphrase is especially important for a native or proficient listener; never infer native-speaker status from country/region alone, and use qualifiers such as ‘may mean’ when proficiency is uncertain.\n")
+			sb.WriteString("The LLM Speaker is an L2 learner. Its mistakes are training samples: for every issue, put a neutral and tentative paraphrase of the possible intention in llm_intended_meaning, then use llm_explanation for how the Human Listener may interpret it and what to observe. Do not lecture the LLM Speaker. This paraphrase is especially important for a native or proficient listener; never infer native-speaker status from country/region alone, and use qualifiers such as ‘may mean’ when proficiency is uncertain.\n")
 			sb.WriteString("Explain problems first through the current wording, specific relationship, the role's personal experience and individual limitations, and observable L2 transfer. Country/region and native language are context, not sufficient evidence for cultural attribution.\n")
 			sb.WriteString("Balance pragmalinguistic and sociopragmatic issues. In addition to politeness or relationship mismatches, notice natural L2 problems such as word order errors, poor word choice, reversed sentence parts, typo-like spelling, and awkward collocations; list them as pragmalinguistic only when they affect intent, politeness, or understanding.\n")
-			sb.WriteString("Mention culture only when the conversation states a personal cultural experience or the context supplies a specific, verifiable convention, and use bounded wording such as ‘may be related to’. Otherwise explain at the wording, individual-habit, L2-transfer, and relationship levels. Never turn a country or culture into a fixed flaw or group habit.\n\n")
+			sb.WriteString("Mention culture only when the conversation states a personal cultural experience or the context supplies a specific, verifiable convention, and use bounded wording such as ‘may be related to’. Otherwise explain at the wording, individual-habit, L2-transfer, and relationship levels. Never turn a country or culture into a fixed flaw or group habit; also evaluate unsupported national/cultural generalizations made by the LLM Speaker as potential sociopragmatic issues.\n")
+			sb.WriteString("llm_suggestion may improve wording only. It must preserve all stated causes, responsibility, timing, commitments, and facts; never invent a more convenient explanation or shift blame to sound polite.\n\n")
 		}
 	}
 
@@ -967,6 +999,7 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 	sb.WriteString("      \"source_role\": \"user/llm\",\n")
 	sb.WriteString("      \"original_text\": \"short representative excerpt or session-level pattern, not necessarily a full message\",\n")
 	sb.WriteString("      \"error_type\": \"语用语言失误/社会语用失误/严重语用语言失误/严重社会语用失误/语用语言失误和社会语用失误/无明显语用失误\",\n")
+	sb.WriteString("      \"llm_intended_meaning\": \"tentative paraphrase of what the speaker likely meant, in the human listener's language\",\n")
 	sb.WriteString("      \"llm_suggestion\": \"one best revised wording or concise listening strategy\",\n")
 	sb.WriteString("      \"llm_explanation\": \"brief explanation for the human user/listener\",\n")
 	sb.WriteString("      \"overall_evaluation\": \"improvable/problematic\"\n")

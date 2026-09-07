@@ -212,7 +212,8 @@ func TestLLML2PromptRetrievesExamplesForCurrentConditions(t *testing.T) {
 
 	wants := []string{
 		"Silent example-retrieval step before each reply:",
-		"speaker from 韩国(Korea) communicating with a user from 中国(China)",
+		"individual L2 speaker (Korean language background)",
+		"locations as context, never as personality or behavior rules",
 		`relationship "teacher and student"`,
 		`topic "asking for a deadline extension"`,
 		"current message",
@@ -349,9 +350,11 @@ func TestCombinedPromptGuardsClassificationCultureAndIntendedMeaning(t *testing.
 	for _, want := range []string{
 		"Country/region and native language are context, not sufficient evidence for cultural attribution",
 		"both are true, error_type must be ‘语用语言失误和社会语用失误’",
-		"first neutrally and tentatively paraphrase the communicative intention",
+		"Write intended_meaning as a separate field",
 		"Never infer native-speaker status from country/region alone",
 		"may mean",
+		"must not add or change causes, responsibility, timing, commitments, or any other fact",
+		"unsupported national or cultural generalization",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("combined prompt is missing guardrail %q\n%s", want, prompt)
@@ -371,8 +374,10 @@ func TestCombinedPromptContainsChineseCulturalAttributionGate(t *testing.T) {
 	for _, want := range []string{
 		"国家/地区和母语只是背景信息，不是文化归因的充分证据",
 		"两者均为 true 时，error_type 必须是‘语用语言失误和社会语用失误’",
-		"先用中性、非断言语气说明说话者可能想完成的交际意图",
+		"intended_meaning 必须单独写给 Human Listener",
 		"不得仅凭国家/地区推断其母语身份",
+		"不得新增或改变原消息中的原因、责任、时间、承诺或其他事实",
+		"概括整个国家/文化",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("Chinese combined prompt is missing guardrail %q\n%s", want, prompt)
@@ -391,13 +396,128 @@ func TestSessionFeedbackPromptExplainsLikelyL2IntentionWithoutNationalityInferen
 	}
 	prompt := buildSessionFeedbackPrompt(session, nil, User{Country: "CN"})
 	for _, want := range []string{
-		"先用中性、非断言语气说明说话者可能想完成的交际意图",
+		"必须把可能意图单独写入 llm_intended_meaning",
 		"不得仅凭国家/地区推断母语身份",
 		"国家/地区和母语只是背景，不是文化归因的充分证据",
-		"禁止把某个国家/文化背景写成固定缺陷或群体习惯",
+		"无依据国家/文化概括也应作为潜在社会语用问题评估",
+		"不得为了显得更礼貌而编造新理由或转移责任",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("session feedback prompt is missing guardrail %q\n%s", want, prompt)
 		}
+	}
+}
+
+func TestMapErrorTypePreservesCombinedImprovableFailure(t *testing.T) {
+	result := GrammarCheckResponse{
+		HasError:                   true,
+		LinguisticPragmaticFailure: true,
+		SocialPragmaticFailure:     true,
+		OverallEvaluation:          "improvable",
+	}
+	if got := mapErrorType(&result); got != ErrorTypeBothFailure {
+		t.Fatalf("combined improvable failure was downgraded to %q", got)
+	}
+}
+
+func TestNormalizeGrammarCheckResultReconcilesContradictoryFields(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          GrammarCheckResponse
+		wantHasError   bool
+		wantType       string
+		wantEvaluation string
+	}{
+		{
+			name: "classification flag overrides false has_error and good evaluation",
+			input: GrammarCheckResponse{
+				SocialPragmaticFailure: true,
+				OverallEvaluation:      " Good ",
+			},
+			wantHasError:   true,
+			wantType:       ErrorTypeSociopragmatic,
+			wantEvaluation: "improvable",
+		},
+		{
+			name: "problematic evaluation is normalized and treated as an error",
+			input: GrammarCheckResponse{
+				OverallEvaluation: " ProBleMatic ",
+			},
+			wantHasError:   true,
+			wantType:       ErrorTypeSeverePragmalinguistic,
+			wantEvaluation: "problematic",
+		},
+		{
+			name: "legacy severe type retains severity",
+			input: GrammarCheckResponse{
+				ErrorType:         ErrorTypeSevereSociopragmatic,
+				OverallEvaluation: " GOOD ",
+			},
+			wantHasError:   true,
+			wantType:       ErrorTypeSevereSociopragmatic,
+			wantEvaluation: "problematic",
+		},
+		{
+			name: "case-insensitive good remains a clean result",
+			input: GrammarCheckResponse{
+				IntendedMeaning:   "must be cleared",
+				Suggestion:        "must be cleared",
+				Explanation:       "must be cleared",
+				OverallEvaluation: " GOOD ",
+			},
+			wantHasError:   false,
+			wantEvaluation: "good",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.input
+			normalizeGrammarCheckResult(&got)
+			if got.HasError != tt.wantHasError || got.ErrorType != tt.wantType || got.OverallEvaluation != tt.wantEvaluation {
+				t.Fatalf("unexpected normalized result: %#v", got)
+			}
+			if !tt.wantHasError && (got.IntendedMeaning != "" || got.Suggestion != "" || got.Explanation != "") {
+				t.Fatalf("clean result retained error-only details: %#v", got)
+			}
+		})
+	}
+}
+
+func TestLLML2PromptForbidsCulturalSelfExplanation(t *testing.T) {
+	prompt := buildLLML2Prompt(
+		ConversationSession{Mode: ModeLLML2, TargetLanguage: "EN", LLMRoleID: "aiko", RelationshipType: "同事", Topic: "商务沟通"},
+		nil,
+		"What happened?",
+		User{Country: "CN"},
+	)
+	for _, want := range []string{
+		"Never explain, diagnose, or justify your wording",
+		"Do not mention the role's country merely to explain a simulated error",
+		"describe variation and avoid presenting a whole group as uniform",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("LLM L2 prompt is missing cultural self-explanation guard %q\n%s", want, prompt)
+		}
+	}
+}
+
+func TestSessionIntendedMeaningAggregation(t *testing.T) {
+	analysis := &SessionPragmaticAnalysis{Issues: []SessionPragmaticIssue{
+		{LLMIntendedMeaning: "  The speaker may be declining the invitation.  "},
+		{},
+		{LLMIntendedMeaning: "The speaker may be asking for clarification."},
+	}}
+	got := buildSessionIntendedMeaningText(analysis)
+	for _, want := range []string{
+		"1. The speaker may be declining the invitation.",
+		"3. The speaker may be asking for clarification.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("intended-meaning aggregation is missing %q: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "可能意图:") {
+		t.Fatalf("stored structured content must not contain a hard-coded locale label: %s", got)
 	}
 }

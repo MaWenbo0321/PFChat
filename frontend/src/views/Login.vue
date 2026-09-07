@@ -16,6 +16,7 @@
               <el-input
                   v-model="loginForm.username"
                   :placeholder="$t('login.username')"
+                  :aria-label="$t('login.username')"
                   :prefix-icon="User"
                   size="large"
               />
@@ -25,6 +26,7 @@
                   v-model="loginForm.password"
                   type="password"
                   :placeholder="$t('login.password')"
+                  :aria-label="$t('login.password')"
                   :prefix-icon="Lock"
                   size="large"
                   show-password
@@ -50,6 +52,7 @@
               <el-input
                   v-model="registerForm.username"
                   :placeholder="$t('login.usernamePlaceholder')"
+                  :aria-label="$t('login.username')"
                   :prefix-icon="User"
                   size="large"
               />
@@ -59,6 +62,7 @@
                   v-model="registerForm.password"
                   type="password"
                   :placeholder="$t('login.passwordPlaceholder')"
+                  :aria-label="$t('login.password')"
                   :prefix-icon="Lock"
                   size="large"
                   show-password
@@ -68,6 +72,7 @@
               <el-select
                   v-model="registerForm.country"
                   :placeholder="$t('login.selectCountry')"
+                  :aria-label="$t('login.selectCountry')"
                   size="large"
                   class="country-select"
               >
