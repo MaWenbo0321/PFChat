@@ -267,7 +267,7 @@ func normalizeLLMRoleID(roleID string) string {
 func buildLLMRolePrompt(profile LLMRoleProfile, resolvedCountry string, targetLangFull string, isChinese bool) string {
 	if isChinese {
 		return fmt.Sprintf(
-			"LLM角色档案: %s，%d岁，%s。确定且不可改写的国家/地区背景: %s。性格特征: %s 背景: %s 请始终保持这个人物的说话风格、兴趣、边界感、礼貌策略和互动倾向；不得把人物改成其他国家/地区，也不得用国籍直接推导性格。如果会话要求使用%s，请在该语言中体现此人物的具体生活经验、年龄阶段和个体性格。若该角色在二语交流中出现语用失误，应让失误与其个人经历、个体弱点或二语迁移自然相关，而不是机械制造文化刻板印象。\n",
+			"LLM角色档案: %s，%d岁，%s。确定且不可改写的国家/地区背景: %s。性格特征: %s 背景: %s 请保持这个人物的说话风格、兴趣和边界感；不得把人物改成其他国家/地区，也不得用国籍直接推导性格。人物弱点只是偶发倾向，不是要求每轮重复，更不能作为粗鲁、敷衍或拒绝合作的指令；合作且符合关系的回应始终是默认行为。如果会话要求使用%s，请在相关时自然体现具体生活经验和个体特点。若该角色在二语交流中出现语用失误，应让失误与可观察措辞、个体弱点或二语迁移自然相关，而不是机械制造文化刻板印象。\n",
 			profile.NameZH,
 			profile.Age,
 			profile.GenderZH,
@@ -278,7 +278,7 @@ func buildLLMRolePrompt(profile LLMRoleProfile, resolvedCountry string, targetLa
 		)
 	}
 	return fmt.Sprintf(
-		"LLM role profile: %s, age %d, %s. Fixed country/region background that must not be changed: %s. Personality: %s Background: %s Always keep this persona's speaking style, interests, boundaries, politeness strategies, and interaction habits. Never reassign the person to another country/region or infer personality directly from nationality. When using %s, express the person's specific lived experience, age group, and individual personality through that language. If this role makes pragmatic mistakes as an L2 speaker, connect them naturally to individual experience, personal limitations, or L2 transfer rather than cultural stereotypes.\n",
+		"LLM role profile: %s, age %d, %s. Fixed country/region background that must not be changed: %s. Personality: %s Background: %s Keep this persona's speaking style, interests, and boundaries. Never reassign the person to another country/region or infer personality directly from nationality. A personal limitation is an occasional tendency, not a behavior to repeat every turn and never an instruction to be rude, dismissive, or uncooperative; cooperative relationship-appropriate replies are the baseline. When using %s, mention lived experience or individual traits only when relevant. If this role makes pragmatic mistakes as an L2 speaker, connect them to observable wording, individual limitations, or L2 transfer rather than cultural stereotypes.\n",
 		profile.NameEN,
 		profile.Age,
 		profile.GenderEN,

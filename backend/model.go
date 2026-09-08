@@ -144,6 +144,7 @@ type GrammarError struct {
 	LLMExplanation      string    `json:"llm_explanation" gorm:"type:text"`
 	ErrorType           string    `json:"error_type" gorm:"type:varchar(50);not null;default:'语用语言失误';index"`
 	OverallEvaluation   string    `json:"overall_evaluation" gorm:"type:varchar(20);index"`
+	IssueCount          int       `json:"issue_count" gorm:"not null;default:1"`
 	CreatedAt           time.Time `json:"created_at"`
 
 	User User `json:"user" gorm:"foreignKey:UserID"`
@@ -161,6 +162,9 @@ func (ge *GrammarError) BeforeCreate(tx *gorm.DB) error {
 	}
 	if ge.SourceRole == "" {
 		ge.SourceRole = ErrorSourceUser
+	}
+	if ge.IssueCount <= 0 && ge.ErrorType != ErrorTypeNoIssue {
+		ge.IssueCount = 1
 	}
 	if ge.SessionMode != ModeUserL2 && ge.SessionMode != ModeLLML2 {
 		switch ge.SourceRole {

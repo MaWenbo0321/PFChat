@@ -247,26 +247,27 @@ func normalizeGrammarCheckResult(result *GrammarCheckResponse) {
 // The prompt discourages labels, while this normalization is the final safeguard
 // before per-turn or session-level feedback is persisted.
 func sanitizeIntendedMeaning(value string) string {
-	prefixes := []string{
-		"说话者可能想表达：",
-		"说话者可能想表达:",
-		"说话者可能意图：",
-		"说话者可能意图:",
-		"可能意图：",
-		"可能意图:",
-		"Likely intended meaning:",
-		"Likely intended meaning：",
-		"Likely speaker intent:",
-		"Likely speaker intent：",
+	labels := []string{
+		"说话者可能想表达",
+		"说话者可能试图表达",
+		"说话者似乎想表达",
+		"说话者想表达",
+		"说话者可能意图",
+		"可能意图",
+		"可能想表达",
+		"Likely intended meaning",
+		"Likely speaker intent",
+		"The speaker may be trying to say",
+		"The speaker may mean",
 	}
 
 	result := strings.TrimSpace(value)
 	for {
 		previous := result
 		result = strings.TrimLeft(result, " \t\r\n>*_#-")
-		for _, prefix := range prefixes {
-			if len(result) >= len(prefix) && strings.EqualFold(result[:len(prefix)], prefix) {
-				result = strings.TrimSpace(result[len(prefix):])
+		for _, label := range labels {
+			if len(result) >= len(label) && strings.EqualFold(result[:len(label)], label) {
+				result = strings.TrimSpace(strings.TrimLeft(result[len(label):], " \t:：-—"))
 				break
 			}
 		}
@@ -274,6 +275,20 @@ func sanitizeIntendedMeaning(value string) string {
 			return result
 		}
 	}
+}
+
+// appendEvaluationEvidenceGuard is shared by per-turn and whole-session
+// evaluators so culture, attribution, and counterpart-blame rules cannot drift.
+func appendEvaluationEvidenceGuard(sb *strings.Builder, isChinese bool) {
+	if isChinese {
+		sb.WriteString("硬性证据门槛：国家/地区、民族和母语只能用于核对身份与语言，不得作为礼貌、人格、动机、沟通距离或行为的解释证据。除非被分析原话本身含有群体概括，或对话明确陈述了某人的具体亲历/具体惯例，否则 summary、conversation_summary、explanation 和 suggestion 均不得提及国家文化，也不得写‘某国人/某国教师通常、往往、重视、倾向于……’。\n")
+		sb.WriteString("归因门槛：只评价当前模式指定的学习者。对方的不耐烦、粗鲁或错误回复不能反向证明学习者有错；若学习者当前表达得体，不得因对方反应不佳而判错。\n")
+		sb.WriteString("事实门槛：精确保留原文中的姓名、编号、日期和关键词；遇到多义词或非评估语言时优先原样引用，不得凭近形词或机器翻译替换。\n\n")
+		return
+	}
+	sb.WriteString("Hard evidence gate: country/region, ethnicity, and native language may only verify identity and language. They are never evidence for politeness, personality, motives, social distance, or behavior. Unless the analyzed utterance itself makes a group claim or the transcript explicitly states a concrete personal experience/convention, summary, conversation_summary, explanation, and suggestion must not mention national culture or claim that people/teachers from a country usually, often, value, or tend to behave a certain way.\n")
+	sb.WriteString("Attribution gate: evaluate only the learner designated by the session mode. A counterpart's impatient, rude, or mistaken response is not evidence that the learner erred; do not flag an appropriate learner utterance because the counterpart reacted poorly.\n")
+	sb.WriteString("Fact gate: preserve names, identifiers, dates, and key source terms exactly. For ambiguous or foreign-language terms, quote the source form instead of replacing it with a look-alike or guessed translation.\n\n")
 }
 
 // buildCombinedPrompt 构建 PFChat 语用检测提示词。
@@ -308,10 +323,8 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString(fmt.Sprintf("- 目标/练习语言: %s\n", targetLang))
 		sb.WriteString(fmt.Sprintf("- 对话关系: %s\n", session.RelationshipType))
 		sb.WriteString(fmt.Sprintf("- 对话主题: %s\n", session.Topic))
-		sb.WriteString(fmt.Sprintf("- 发送者国家/地区: %s\n", getCountryName(sender.Country)))
 		sb.WriteString(fmt.Sprintf("- 当前分析对象: %s\n", analysisTarget))
-		sb.WriteString(fmt.Sprintf("- 接收者语言背景: %s\n", getCountryName(receiver.Country)))
-		sb.WriteString(fmt.Sprintf("- LLM角色档案: %s，%d岁，%s；文化背景: %s；母语/主要语言: %s；性格与个人弱点: %s；生活背景: %s\n\n",
+		sb.WriteString(fmt.Sprintf("- LLM角色档案: %s，%d岁，%s；身份元数据（仅核对一致性）: 国家/地区 %s、母语/主要语言 %s；个体特点: %s；生活背景: %s\n\n",
 			roleProfile.NameZH,
 			roleProfile.Age,
 			roleProfile.GenderZH,
@@ -364,10 +377,8 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString(fmt.Sprintf("- Target/practice language: %s\n", targetLang))
 		sb.WriteString(fmt.Sprintf("- Relationship: %s\n", session.RelationshipType))
 		sb.WriteString(fmt.Sprintf("- Topic: %s\n", session.Topic))
-		sb.WriteString(fmt.Sprintf("- Sender country/region: %s\n", getCountryName(sender.Country)))
 		sb.WriteString(fmt.Sprintf("- Current analysis target: %s\n", analysisTarget))
-		sb.WriteString(fmt.Sprintf("- Receiver language background: %s\n", getCountryName(receiver.Country)))
-		sb.WriteString(fmt.Sprintf("- LLM role profile: %s, age %d, %s; cultural background: %s; native/main language: %s; personality and individual flaws: %s; life background: %s\n\n",
+		sb.WriteString(fmt.Sprintf("- LLM role profile: %s, age %d, %s; identity metadata for consistency only: country/region %s and native/main language %s; individual traits: %s; life background: %s\n\n",
 			roleProfile.NameEN,
 			roleProfile.Age,
 			roleProfile.GenderEN,
@@ -411,6 +422,7 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 		sb.WriteString("- social_pragmatic_failure: whether the message misjudges social relationship, distance, power, cultural norms, or situational expectations.\n")
 		sb.WriteString("- overall_evaluation: good means no clear issue; improvable means mild/moderate inappropriateness; problematic means likely offense or communication breakdown.\n\n")
 	}
+	appendEvaluationEvidenceGuard(&sb, isChineseMsg)
 
 	if len(history) > 0 {
 		if isChineseMsg {

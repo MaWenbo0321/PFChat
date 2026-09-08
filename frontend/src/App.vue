@@ -24,9 +24,9 @@ const elementLocale = computed(() => locale.value === 'zh-CN' ? zhCn : en)
 }
 
 .app-root {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
 }
 </style>

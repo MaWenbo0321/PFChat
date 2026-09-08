@@ -121,6 +121,9 @@ func initDB() {
 	if err := backfillGrammarErrorSessionModes(); err != nil {
 		log.Printf("Failed to backfill grammar error session modes: %v", err)
 	}
+	if err := backfillGrammarErrorIssueCounts(); err != nil {
+		log.Printf("Failed to backfill grammar error issue counts: %v", err)
+	}
 
 	// 创建默认管理员账号
 	createDefaultAdmin()

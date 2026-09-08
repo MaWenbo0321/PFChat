@@ -57,7 +57,6 @@
           <el-option :label="$t('grammar.errorType3')" value="严重语用语言失误" />
           <el-option :label="$t('grammar.errorType4')" value="严重社会语用失误" />
           <el-option :label="$t('grammar.errorType5')" value="语用语言失误和社会语用失误" />
-          <el-option :label="$t('grammar.errorType6')" value="无明显语用失误" />
         </el-select>
         <el-select
             v-model="currentModeFilter"
@@ -110,6 +109,9 @@
                     </el-tag>
                     <el-tag size="small" type="info" effect="plain">
                       {{ getPracticeModeLabel(error) }}
+                    </el-tag>
+                    <el-tag v-if="getIssueCount(error) > 1" size="small" type="warning" effect="plain">
+                      {{ $t('grammar.issueCount', { count: getIssueCount(error) }) }}
                     </el-tag>
                   </div>
                   <div class="error-actions">
@@ -210,7 +212,6 @@
             <el-option :label="$t('grammar.errorType3')" value="严重语用语言失误" />
             <el-option :label="$t('grammar.errorType4')" value="严重社会语用失误" />
             <el-option :label="$t('grammar.errorType5')" value="语用语言失误和社会语用失误" />
-            <el-option :label="$t('grammar.errorType6')" value="无明显语用失误" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -247,6 +248,7 @@ const { t, locale } = useI18n()
 const errors = ref([])
 const statistics = ref({
   total: 0,
+  record_total: 0,
   by_type: {},
   today_count: 0,
   week_count: 0
@@ -260,15 +262,16 @@ const changeTypeForm = ref({
   newType: '语用语言失误'
 })
 
-// 5种错误类型
+// 错误库只展示实际语用问题；无问题会话保留在会话报告中，不进入错误库。
 const ALL_ERROR_TYPES = [
   '语用语言失误',
   '社会语用失误',
   '严重语用语言失误',
   '严重社会语用失误',
-  '语用语言失误和社会语用失误',
-  '无明显语用失误'
+  '语用语言失误和社会语用失误'
 ]
+
+const getIssueCount = (error) => Math.max(1, Number(error?.issue_count) || 1)
 
 // 判断是否为严重(problematic)类型
 const isProblematicType = (errorType) => {
@@ -397,6 +400,7 @@ const loadErrors = async (errorType = currentTypeFilter.value, sessionMode = cur
     errors.value = response.errors || []
     statistics.value = response.statistics || {
       total: 0,
+      record_total: 0,
       by_type: {},
       today_count: 0,
       week_count: 0
@@ -493,7 +497,7 @@ const clearCurrentType = async () => {
 const clearAll = async () => {
   try {
     await ElMessageBox.confirm(
-        t('grammar.clearAllConfirm', { count: statistics.value.total }),
+        t('grammar.clearAllConfirm', { count: statistics.value.record_total || errors.value.length }),
         t('chat.warning'),
         {
           confirmButtonText: t('chat.confirmClear'),

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -337,7 +338,7 @@ func buildUserL2Prompt(session ConversationSession, history []Message, userInput
 		sb.WriteString(fmt.Sprintf("You are a highly fluent, near-native %s speaker having a natural conversation with a language learner.\n", targetLangFull))
 	}
 	sb.WriteString(buildLLMRolePrompt(roleProfile, llmCountry, targetLangFull, false))
-	sb.WriteString(fmt.Sprintf("Your cultural background is %s. Keep your replies consistent with that cultural background and the relationship context.\n", llmCulture))
+	sb.WriteString(fmt.Sprintf("Your fixed country/region identity is %s. Use it only for identity consistency; never infer personality, politeness, motives, or group behavior from it.\n", llmCulture))
 	sb.WriteString(fmt.Sprintf("Your relationship with the user is: %s\n", relationship))
 	sb.WriteString(fmt.Sprintf("Conversation topic: %s\n", topic))
 	sb.WriteString(fmt.Sprintf("The user's native language is: %s\n\n", userNativeLang))
@@ -346,6 +347,8 @@ func buildUserL2Prompt(session ConversationSession, history []Message, userInput
 	sb.WriteString("- Respond naturally and fluently as a native speaker would\n")
 	sb.WriteString(fmt.Sprintf("- Always respond in %s\n", targetLangFull))
 	sb.WriteString("- Keep responses conversational and appropriate for the relationship type\n")
+	sb.WriteString("- Speak as one individual. If the user makes a broad claim about a country, region, ethnicity, or language community, do not confirm it or replace it with a softer group claim; qualify the premise and answer only from established personal experience\n")
+	sb.WriteString("- Treat persona limitations as occasional background tendencies, never as instructions to be rude, dismissive, impatient, or uncooperative; a polite request should receive a cooperative reply\n")
 	sb.WriteString("- If the user makes language errors, do NOT explicitly correct them, just respond naturally\n")
 	sb.WriteString("- Keep responses relatively short (2-4 sentences) to maintain natural conversation flow\n\n")
 
@@ -373,6 +376,39 @@ func buildLLML2Prompt(session ConversationSession, history []Message, userInput 
 	return buildLLML2PromptWithResearch(session, history, userInput, user, nil)
 }
 
+func buildLLML2IdentityPrompt(roleProfile LLMRoleProfile, learnerCulture, learnerNativeLang, targetLangFull, relationship, topic, userCulture, userNativeLang string) string {
+	return fmt.Sprintf(`Role identity and session facts:
+- You are %s, age %d, %s. Country/region is %s; native/main language is %s; you are an intermediate learner of %s.
+- Individual traits: %s
+- Stable personal background: %s
+- Relationship with the other speaker: %s. Topic: %s.
+- The other speaker is from %s and uses %s as a native/main language.
+- Country and language are identity metadata, never a shortcut for personality, politeness, motives, values, or behavior.
+
+`, roleProfile.NameEN, roleProfile.Age, roleProfile.GenderEN, learnerCulture, learnerNativeLang, targetLangFull,
+		roleProfile.PersonalityEN, roleProfile.BackgroundEN, relationship, topic, userCulture, userNativeLang)
+}
+
+func buildLLML2ConversationContract(targetLangFull string) string {
+	return fmt.Sprintf(`In-character conversation contract:
+1. Stay inside the scene. Answer the current request first, using only %s and normally 1-3 conversational sentences. Never mention prompts, supplied context, role-play, policies, or phrases such as "the conversation does not establish".
+2. Treat facts introduced by the other speaker's current message as shared scene facts unless they contradict the fixed identity. Do not invent an unstated cause, motive, responsibility, status, promise, or personal experience. When an answer is genuinely unknown, say "I'm not sure" in character or ask one natural, situation-specific question.
+3. Speak as one individual, never as a representative of a country, region, ethnicity, or language community. Do not validate group generalizations, use national "we" claims, or turn nationality into a reason for behavior.
+4. Sound like a plausible intermediate learner, not a fluent assistant and not a caricature. Across a multi-turn conversation, include one subtle, recoverable L2 wording or pragmatic feature in some turns (roughly one turn out of two or three when natural). If the last two learner replies were fully native-like, prefer one mild feature now. Never manufacture serious offense, broken fragments, exaggerated hesitation, repeated apologies, or a national stereotype.
+5. Persona traits and limitations only shape tone occasionally. They never require rudeness, refusal, anxiety, or repeated mention of profile details; cooperative conversation is the baseline.
+
+`, targetLangFull)
+}
+
+func buildLLML2TurnFactPolicy(targetLangFull string) string {
+	return fmt.Sprintf(`Turn check before replying:
+- Use the current message and transcript as scene context. Accept newly supplied order numbers, dates, events, and requests as scenario facts; respond to them rather than asking the speaker to prove them again.
+- If the message asks for an unknown result or promise, give a natural in-role limitation or clarification without inventing why it happened and without discussing missing "conversation context".
+- If it contains a group stereotype, qualify or reject the premise and answer only for yourself; do not replace it with a softer stereotype.
+- Silently remove unsupported factual claims, meta-commentary, national generalizations, and unnecessary profile exposition.
+Output only %s dialogue as the character:`, targetLangFull)
+}
+
 func buildLLML2PromptWithResearch(session ConversationSession, history []Message, userInput string, user User, research *PragmaticExampleResearch) string {
 	var sb strings.Builder
 
@@ -387,36 +423,8 @@ func buildLLML2PromptWithResearch(session ConversationSession, history []Message
 	learnerNativeLang := getLLMPersonaNativeLanguage(session, user)
 	userCulture := getCountryName(user.Country)
 
-	sb.WriteString("LLM role identity (fixed context, not a script for this turn):\n")
-	sb.WriteString(fmt.Sprintf("- Name: %s; age: %d; gender: %s\n", roleProfile.NameEN, roleProfile.Age, roleProfile.GenderEN))
-	sb.WriteString(fmt.Sprintf("- Fixed country/region background: %s\n", learnerCulture))
-	sb.WriteString(fmt.Sprintf("- General personality tendencies: %s\n", roleProfile.PersonalityEN))
-	sb.WriteString(fmt.Sprintf("- Stable background facts: %s\n", roleProfile.BackgroundEN))
-	sb.WriteString("- These details constrain identity and tone. They do not establish what happened today, why an event occurred, what the person currently thinks, or what the person can promise.\n")
-	sb.WriteString(fmt.Sprintf("You are a language learner from %s. Your native/main language is %s, not %s. ", learnerCulture, learnerNativeLang, targetLangFull))
-	sb.WriteString(fmt.Sprintf("You are learning %s as a second language and your level is intermediate.\n", targetLangFull))
-	sb.WriteString(fmt.Sprintf("Your relationship with the user is: %s\n", relationship))
-	sb.WriteString(fmt.Sprintf("Conversation topic: %s\n", topic))
-	sb.WriteString(fmt.Sprintf("The user is from %s and their native/main language is %s.\n\n", userCulture, userNativeLang))
-
-	sb.WriteString("Role-play contract - follow these priorities in order:\n")
-	sb.WriteString("1. Natural, relevant reply\n")
-	sb.WriteString("- Reply as this individual to the user's current message. Answer a concrete request or question before adding character flavor. Do not explain or diagnose your own wording.\n")
-	sb.WriteString("- Keep responses conversational (normally 2-4 sentences) and respond only in the target language.\n\n")
-	sb.WriteString("2. Preserve known facts\n")
-	sb.WriteString("- Treat only the supplied profile, conversation history, and current message as established facts. Profile facts are constraints, not material that must appear in every reply.\n")
-	sb.WriteString("- Unknown motives, causes, responsibility, deadlines, promises, availability, personal experiences, workplace practices, customers, managers, and task status are unknown facts. Never invent them merely to answer smoothly or demonstrate the persona.\n")
-	sb.WriteString("- If a requested fact is unknown, say that the available context does not establish it and ask for the missing information. Do not make up a reason, event, commitment, or opinion.\n")
-	sb.WriteString("- Mention a profile detail such as work, hobbies, location, or personal limitations only when it directly answers the current message.\n\n")
-	sb.WriteString("3. Handle cultural questions as one individual\n")
-	sb.WriteString("- A cultural premise in the user's question is not automatically true. Never speak as a representative of a country, ethnicity, culture, or language community, and never use national ‘we’ statements or claims such as ‘people from X usually...’.\n")
-	sb.WriteString("- When the user makes a group generalization, calmly qualify it, speak only from a specific personal experience already stated in the context, or say that nationality alone cannot answer it. Ask about the concrete event behind the impression when useful.\n")
-	sb.WriteString("- Discuss a cultural practice only when the conversation supplies a relevant, specific first-person experience or a concrete convention. Describe variation and uncertainty; never derive personality, motives, politeness, or behavior from nationality.\n\n")
-	sb.WriteString("4. Simulate L2 speech without caricature\n")
-	sb.WriteString("- Natural communication comes first. A pragmatic issue is optional. Use at most one subtle, recoverable L2 feature in a suitable turn, and prefer no issue over a stereotyped, repetitive, implausible, or context-mismatched one.\n")
-	sb.WriteString("- Possible subtle features include a mild word-order, word-choice, collocation, mitigation, refusal, or relationship-calibration problem. Serious social-pragmatic problems must be uncommon.\n")
-	sb.WriteString("- Never perform an L2 learner through broken fragments, repeated apologies, exaggerated hesitation, or irrelevant profile details. Never label the simulated error or attribute it to nationality.\n")
-	sb.WriteString("- Mention a specific transfer language only when it matches the configured native/main language and the exact wording supplies direct evidence. Otherwise do not name a national variety such as ‘Chinese English’ or ‘Japanese English’.\n\n")
+	sb.WriteString(buildLLML2IdentityPrompt(roleProfile, learnerCulture, learnerNativeLang, targetLangFull, relationship, topic, userCulture, userNativeLang))
+	sb.WriteString(buildLLML2ConversationContract(targetLangFull))
 
 	if research != nil && len(research.Examples) > 0 {
 		exampleJSON, err := json.Marshal(research.Examples)
@@ -435,10 +443,6 @@ func buildLLML2PromptWithResearch(session ConversationSession, history []Message
 		sb.WriteString("- Select at most one fitting pattern. Reject it if it requires a stereotype, an unknown fact, or an irrelevant profile detail. Keep this process hidden.\n\n")
 	}
 
-	sb.WriteString("Silent pre-output check:\n")
-	sb.WriteString("- Does the reply answer the user, preserve every known fact, leave unknown facts unknown, avoid group claims and irrelevant profile details, match the configured language background, and sound like a real individual rather than a cultural or L2 caricature? If not, rewrite it.\n")
-	sb.WriteString(fmt.Sprintf("- Output only the in-character reply in %s.\n\n", targetLangFull))
-
 	if len(history) > 0 {
 		sb.WriteString("Conversation history:\n")
 		for i := len(history) - 1; i >= 0; i-- {
@@ -453,15 +457,7 @@ func buildLLML2PromptWithResearch(session ConversationSession, history []Message
 	}
 
 	sb.WriteString(fmt.Sprintf("Native speaker's message: %s\n", userInput))
-	sb.WriteString("Turn-specific hard fact gate:\n")
-	sb.WriteString("- A question, suggested explanation, stereotype, or requested promise in the native speaker's message does not supply its own answer.\n")
-	sb.WriteString("- Do not convert a general personality tendency, occupation, hobby, or country background into a current event, cause, motive, opinion, availability, or workplace practice.\n")
-	sb.WriteString("- If a cultural question has no documented first-person experience in the profile or history, do not invent one and do not say ‘in my office’, ‘in my experience’, or ‘I usually’. State that nationality alone cannot answer it and ask about the concrete situation instead.\n")
-	sb.WriteString("- In that situation, do not replace the cultural claim with another unsupported personal explanation such as ‘that was my personal style’ or ‘I did not intend to be indirect’. The speaker's past intent and style in an unspecified event are also unknown.\n")
-	sb.WriteString("- If the native speaker asks why something happened, whether you can meet a deadline, or for details not explicitly recorded above, state that you do not have enough established information and ask for what is needed. Do not guess or agree for conversational smoothness.\n")
-	sb.WriteString("- Do not turn missing context into a new claim such as ‘I have not checked’, ‘I do not have it in front of me’, or ‘nobody told me’. Say only that the conversation does not establish the requested fact.\n")
-	sb.WriteString("- Silently verify that every factual claim in the reply is directly supported by the profile, history, or message. Delete any unsupported claim.\n")
-	sb.WriteString(fmt.Sprintf("Your response as a %s learner (output only the reply):", targetLangFull))
+	sb.WriteString(buildLLML2TurnFactPolicy(targetLangFull))
 
 	return sb.String()
 }
@@ -737,22 +733,43 @@ func analyzeSessionPragmatics(session ConversationSession, messages []Message, u
 	analysis.Summary = strings.TrimSpace(analysis.Summary)
 	analysis.ConversationSummary = strings.TrimSpace(analysis.ConversationSummary)
 	analysis.Issues = sanitizeSessionIssues(analysis.Issues)
+	analysis.Issues = enforceSessionModeIssues(session.Mode, analysis.Issues)
 	if len(analysis.Issues) == 0 {
 		analysis.ConversationSummary = ""
 	}
-	for i := range analysis.Issues {
-		if session.Mode == ModeLLML2 {
-			analysis.Issues[i].LLMSuggestion = ""
-		} else if session.Mode == ModeUserL2 {
-			analysis.Issues[i].LLMIntendedMeaning = ""
-		}
-	}
 	return &analysis, nil
+}
+
+func enforceSessionModeIssues(mode string, issues []SessionPragmaticIssue) []SessionPragmaticIssue {
+	expectedSource := ErrorSourceUser
+	if mode == ModeLLML2 {
+		expectedSource = ErrorSourceLLM
+	}
+	result := make([]SessionPragmaticIssue, 0, len(issues))
+	for _, issue := range issues {
+		if normalizeSessionIssueSourceRole(issue.SourceRole) != expectedSource {
+			continue
+		}
+		issue.SourceRole = expectedSource
+		if mode == ModeLLML2 {
+			issue.LLMSuggestion = ""
+		} else {
+			issue.LLMIntendedMeaning = ""
+		}
+		result = append(result, issue)
+	}
+	return result
 }
 
 func replaceSessionFeedbackRecord(session ConversationSession, userID uint, messages []Message, analysis *SessionPragmaticAnalysis) error {
 	if analysis == nil {
 		return nil
+	}
+
+	// “错误记录”只保存真实问题；零问题报告仍返回前端展示，但不污染错误库与统计。
+	if len(analysis.Issues) == 0 {
+		return db.Where("user_id = ? AND session_id = ? AND message_id = ?", userID, session.ID, 0).
+			Delete(&GrammarError{}).Error
 	}
 
 	intendedMeaning := buildSessionIntendedMeaningText(analysis)
@@ -776,6 +793,7 @@ func replaceSessionFeedbackRecord(session ConversationSession, userID uint, mess
 		LLMExplanation:      buildSessionAnalysisText(analysis),
 		ErrorType:           getPrimarySessionErrorType(analysis.Issues),
 		OverallEvaluation:   getSessionOverallEvaluation(analysis.Issues),
+		IssueCount:          len(analysis.Issues),
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("user_id = ? AND session_id = ? AND message_id = ?", userID, session.ID, 0).
@@ -958,6 +976,62 @@ func buildSessionAnalysisText(analysis *SessionPragmaticAnalysis) string {
 	return strings.TrimSpace(sb.String())
 }
 
+// inferStoredSessionIssueCount lets AutoMigrate repair the statistics of older
+// aggregate session records without deleting their feedback text.
+func inferStoredSessionIssueCount(record GrammarError) int {
+	if record.ErrorType == ErrorTypeNoIssue {
+		return 0
+	}
+	text := record.LLMExplanation
+	start := strings.Index(text, "错误类型汇总:")
+	if start >= 0 {
+		section := text[start+len("错误类型汇总:"):]
+		if end := strings.Index(section, "代表性错误分析:"); end >= 0 {
+			section = section[:end]
+		}
+		total := 0
+		for _, line := range strings.Split(section, "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "-") {
+				continue
+			}
+			colon := strings.LastIndexAny(line, ":：")
+			if colon < 0 {
+				continue
+			}
+			if count, err := strconv.Atoi(strings.TrimSpace(line[colon+1:])); err == nil && count > 0 {
+				total += count
+			}
+		}
+		if total > 0 {
+			return total
+		}
+	}
+	if record.IssueCount > 0 {
+		return record.IssueCount
+	}
+	return 1
+}
+
+func backfillGrammarErrorIssueCounts() error {
+	var records []GrammarError
+	if err := db.Where("source_role = ?", "session").Find(&records).Error; err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, record := range records {
+			count := inferStoredSessionIssueCount(record)
+			if count == record.IssueCount {
+				continue
+			}
+			if err := tx.Model(&GrammarError{}).Where("id = ?", record.ID).Update("issue_count", count).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func getSessionErrorTypeCounts(issues []SessionPragmaticIssue) map[string]int {
 	counts := make(map[string]int)
 	for _, issue := range issues {
@@ -985,7 +1059,6 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 	var sb strings.Builder
 	isZh := isChineseUser(user)
 	targetLang := getLanguageFullName(session.TargetLanguage)
-	humanCulture := getCountryName(user.Country)
 	roleProfile := getSessionLLMRoleProfile(session)
 	llmCountry := getLLMPersonaNativeCountry(session, user)
 	llmCulture := getCountryName(llmCountry)
@@ -998,9 +1071,8 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 		sb.WriteString(fmt.Sprintf("练习语言: %s\n", targetLang))
 		sb.WriteString(fmt.Sprintf("对话关系: %s\n", session.RelationshipType))
 		sb.WriteString(fmt.Sprintf("对话主题: %s\n", session.Topic))
-		sb.WriteString(fmt.Sprintf("Human Listener/Speaker 文化背景: %s\n", humanCulture))
 		sb.WriteString(fmt.Sprintf("LLM角色: %s，%d岁，%s。%s %s\n", roleProfile.NameZH, roleProfile.Age, roleProfile.GenderZH, roleProfile.PersonalityZH, roleProfile.BackgroundZH))
-		sb.WriteString(fmt.Sprintf("LLM Speaker 文化背景: %s，母语/主要语言: %s\n\n", llmCulture, llmNativeLang))
+		sb.WriteString(fmt.Sprintf("LLM Speaker 身份元数据（只用于一致性核对）: 国家/地区 %s，母语/主要语言 %s\n\n", llmCulture, llmNativeLang))
 		sb.WriteString("一致性要求: 报告必须沿用上述 LLM 角色姓名、国家/地区和语言背景；不得擅自替换为其他国家文化，也不得用国籍概括人格。\n\n")
 	} else {
 		sb.WriteString("You are PFChat's cross-cultural pragmatics session-feedback evaluator. Analyze the completed conversation once, not sentence by sentence.\n")
@@ -1009,14 +1081,15 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 		sb.WriteString(fmt.Sprintf("Practice language: %s\n", targetLang))
 		sb.WriteString(fmt.Sprintf("Relationship: %s\n", session.RelationshipType))
 		sb.WriteString(fmt.Sprintf("Topic: %s\n", session.Topic))
-		sb.WriteString(fmt.Sprintf("Human Listener/Speaker cultural background: %s\n", humanCulture))
 		sb.WriteString(fmt.Sprintf("LLM role: %s, age %d, %s. %s %s\n", roleProfile.NameEN, roleProfile.Age, roleProfile.GenderEN, roleProfile.PersonalityEN, roleProfile.BackgroundEN))
-		sb.WriteString(fmt.Sprintf("LLM Speaker cultural background: %s; native/main language: %s\n\n", llmCulture, llmNativeLang))
+		sb.WriteString(fmt.Sprintf("LLM Speaker identity metadata (consistency only): country/region %s; native/main language %s\n\n", llmCulture, llmNativeLang))
 		sb.WriteString("Consistency rule: keep the exact LLM name, country/region, and language background above. Never substitute another national culture or use nationality as a personality summary.\n\n")
 	}
+	appendEvaluationEvidenceGuard(&sb, isZh)
 
 	if session.Mode == ModeLLML2 {
 		if isZh {
+			sb.WriteString("本模式只评价 LLM Speaker；issues 中每项 source_role 必须为 llm。Human 的措辞仅提供上下文，不得作为问题记录。\n")
 			sb.WriteString("LLM Speaker 是第二语言学习者。它的失误是训练样例：每个问题必须把可能意图单独写入 llm_intended_meaning，该字段只能包含意图释义本身，不得带‘说话者可能想表达：’‘可能意图：’等字段名或前缀；再在 llm_explanation 中说明 Human Listener 可能如何理解、可以观察什么，不要对 LLM Speaker 说教。母语或熟练听者尤其需要这项意图释义；不得仅凭国家/地区推断母语身份，无法确认时仍可用‘可能’‘看起来’等限定语提供释义。\n")
 			sb.WriteString("请优先从当前措辞、具体关系、角色的个人经历与个体弱点，以及可观察到的二语迁移解释问题。国家/地区和母语只是背景，不是文化归因的充分证据。\n")
 			sb.WriteString("请平衡识别语用语言失误和社会语用失误。除礼貌/关系误判外，也要关注自然的二语问题：语序错误、用词不当、句子成分颠倒、错别字/拼写近似、搭配生硬；只有这些影响意图、礼貌或理解时才列为语用语言失误。\n")
@@ -1026,6 +1099,7 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 			sb.WriteString("若问题涉及无依据的群体概括，分析必须指出它；不得用‘某国人通常/往往’等较弱的群体判断替代原概括。\n")
 			sb.WriteString("输出前核对人物国家/地区、母语、关系和已知事实，并确保各字段相互一致。\n\n")
 		} else {
+			sb.WriteString("Evaluate only the LLM Speaker in this mode; every issue source_role must be llm. Human wording is context and must not be recorded as an issue.\n")
 			sb.WriteString("The LLM Speaker is an L2 learner. Its mistakes are training samples: for every issue, put a neutral and tentative paraphrase of the possible intention in llm_intended_meaning. That field must contain only the paraphrase itself, never a label or prefix such as ‘Likely intended meaning:’. Then use llm_explanation for how the Human Listener may interpret it and what to observe. Do not lecture the LLM Speaker. This paraphrase is especially important for a native or proficient listener; never infer native-speaker status from country/region alone, and use qualifiers such as ‘may mean’ when proficiency is uncertain.\n")
 			sb.WriteString("Explain problems first through the current wording, specific relationship, the role's personal experience and individual limitations, and observable L2 transfer. Country/region and native language are context, not sufficient evidence for cultural attribution.\n")
 			sb.WriteString("Balance pragmalinguistic and sociopragmatic issues. In addition to politeness or relationship mismatches, notice natural L2 problems such as word order errors, poor word choice, reversed sentence parts, typo-like spelling, and awkward collocations; list them as pragmalinguistic only when they affect intent, politeness, or understanding.\n")
@@ -1037,8 +1111,10 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 		}
 	} else if session.Mode == ModeUserL2 {
 		if isZh {
+			sb.WriteString("本模式只评价 Human Speaker；issues 中每项 source_role 必须为 user。LLM 的措辞仅提供上下文；不得把 LLM 的不耐烦或错误反应归咎于 Human。\n")
 			sb.WriteString("Human Speaker 是第二语言学习者。用户知道自己想表达什么，因此每个问题的 llm_intended_meaning 必须为空字符串，不要替用户猜测意图。llm_suggestion 应给出一个可直接使用的改写，并严格保留原话的事实条件、立场、原因、责任、时间和承诺。\n\n")
 		} else {
+			sb.WriteString("Evaluate only the Human Speaker in this mode; every issue source_role must be user. LLM wording is context only; never blame the Human for an impatient or mistaken LLM reaction.\n")
 			sb.WriteString("The Human Speaker is the L2 learner. The user already knows their own intent, so llm_intended_meaning must be an empty string for every issue; do not guess it for them. llm_suggestion should provide one directly usable revision while preserving the source's truth conditions, stance, causes, responsibility, timing, and commitments.\n\n")
 		}
 	}
@@ -1082,9 +1158,9 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 	sb.WriteString("  ]\n")
 	sb.WriteString("}\n")
 	if isZh {
-		sb.WriteString("conversation_summary 仅在 issues 非空时填写。请用大约5个简洁句子说明对话主题、双方关系、双方大致或准确说了什么，以及问题出现前后的语境；只能使用完整对话和会话字段中的事实，不得补写事件、原因或动机。issues 为空时该字段必须为空字符串。\n")
+		sb.WriteString("conversation_summary 仅在 issues 非空时填写。请用大约5个简洁句子说明对话主题、双方关系、双方大致或准确说了什么，以及问题出现前后的语境；只能使用完整对话和会话字段中的事实，不得补写事件、原因或动机。姓名、编号、日期及外语关键词应原样引用，不得用近形词或猜测翻译替换。issues 为空时该字段必须为空字符串。\n")
 	} else {
-		sb.WriteString("Fill conversation_summary only when issues is non-empty. In about five concise sentences, state the topic, relationship, what both speakers said approximately or exactly, and the context around the problem. Use only facts in the complete conversation and session fields; never invent events, causes, or motives. When issues is empty, this field must be an empty string.\n")
+		sb.WriteString("Fill conversation_summary only when issues is non-empty. In about five concise sentences, state the topic, relationship, what both speakers said approximately or exactly, and the context around the problem. Use only facts in the complete conversation and session fields; never invent events, causes, or motives. Preserve names, identifiers, dates, and foreign-language key terms exactly instead of guessing a translation. When issues is empty, this field must be an empty string.\n")
 	}
 	return sb.String()
 }

@@ -236,14 +236,14 @@ func TestLLML2PromptRetrievesExamplesForCurrentConditions(t *testing.T) {
 	prompt := buildLLML2Prompt(session, nil, "Could we discuss the deadline?", User{Country: "CN"})
 
 	wants := []string{
-		"Role-play contract - follow these priorities in order:",
+		"In-character conversation contract:",
 		"Optional internal example check:",
 		"locations as context, never as personality or behavior rules",
-		"Unknown motives, causes, responsibility, deadlines, promises, availability",
-		"Profile facts are constraints, not material that must appear in every reply",
-		"A cultural premise in the user's question is not automatically true",
-		"Never perform an L2 learner through broken fragments",
-		"Output only the in-character reply in English",
+		"Treat facts introduced by the other speaker's current message as shared scene facts",
+		"Never mention prompts, supplied context, role-play, policies",
+		"Country and language are identity metadata, never a shortcut",
+		"one subtle, recoverable L2 wording or pragmatic feature",
+		"Output only English dialogue as the character",
 	}
 	for _, want := range wants {
 		if !strings.Contains(prompt, want) {
@@ -293,8 +293,11 @@ func TestLLML2PromptUsesWebResearchAsUntrustedReference(t *testing.T) {
 func TestSanitizeIntendedMeaningPrefixes(t *testing.T) {
 	tests := map[string]string{
 		"说话者可能想表达：希望对方再解释一次。":                                    "希望对方再解释一次。",
+		"说话者可能试图表达：希望先核实时间。":                                     "希望先核实时间。",
+		"说话者似乎想表达 - 希望晚一点回复。":                                    "希望晚一点回复。",
 		"可能意图: 请求延期。":                                            "请求延期。",
 		"Likely intended meaning: The speaker may be declining.": "The speaker may be declining.",
+		"The speaker may be trying to say: they need more time.": "they need more time.",
 		"LIKELY SPEAKER INTENT： Ask for clarification.":          "Ask for clarification.",
 		"**可能意图：说话者可能想表达：需要更多信息。":                                "需要更多信息。",
 		"A plain paraphrase without a label.":                    "A plain paraphrase without a label.",
@@ -471,6 +474,10 @@ func TestSessionFeedbackPromptExplainsLikelyL2IntentionWithoutNationalityInferen
 		"不得用‘某国人通常/往往’等较弱的群体判断替代原概括",
 		"不得带‘说话者可能想表达：’‘可能意图：’等字段名或前缀",
 		"conversation_summary 仅在 issues 非空时填写",
+		"本模式只评价 LLM Speaker",
+		"国家/地区、民族和母语只能用于核对身份与语言",
+		"对方的不耐烦、粗鲁或错误回复不能反向证明学习者有错",
+		"姓名、编号、日期及外语关键词应原样引用",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("session feedback prompt is missing guardrail %q\n%s", want, prompt)
@@ -617,14 +624,14 @@ func TestLLML2PromptForbidsCulturalSelfExplanation(t *testing.T) {
 		User{Country: "CN"},
 	)
 	for _, want := range []string{
-		"fixed context, not a script for this turn",
-		"Do not explain or diagnose your own wording",
-		"never use national ‘we’ statements",
-		"nationality alone cannot answer it",
-		"Unknown motives, causes, responsibility, deadlines, promises, availability",
-		"Profile facts are constraints, not material that must appear in every reply",
-		"Never perform an L2 learner through broken fragments",
-		"do not replace the cultural claim with another unsupported personal explanation",
+		"Role identity and session facts",
+		"Never mention prompts, supplied context, role-play, policies",
+		"never as a representative of a country",
+		"Do not validate group generalizations",
+		"Do not invent an unstated cause, motive, responsibility, status, promise",
+		"Accept newly supplied order numbers, dates, events, and requests as scenario facts",
+		"without discussing missing \"conversation context\"",
+		"cooperative conversation is the baseline",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("LLM L2 prompt is missing cultural self-explanation guard %q\n%s", want, prompt)
@@ -632,6 +639,52 @@ func TestLLML2PromptForbidsCulturalSelfExplanation(t *testing.T) {
 	}
 	if strings.Contains(prompt, "express the person's specific lived experience") {
 		t.Fatal("LLM L2 prompt must not require persona background to appear in every reply")
+	}
+}
+
+func TestInferStoredSessionIssueCount(t *testing.T) {
+	tests := []struct {
+		name   string
+		record GrammarError
+		want   int
+	}{
+		{
+			name: "aggregated session report",
+			record: GrammarError{ErrorType: ErrorTypeSociopragmatic, IssueCount: 1, LLMExplanation: `整体反馈:
+ok
+
+错误类型汇总:
+- 社会语用失误: 1
+- 严重社会语用失误: 2
+
+代表性错误分析:
+1. 来源: 用户`},
+			want: 3,
+		},
+		{name: "zero issue historical report", record: GrammarError{ErrorType: ErrorTypeNoIssue, IssueCount: 1}, want: 0},
+		{name: "ordinary record fallback", record: GrammarError{ErrorType: ErrorTypePragmalinguistic, IssueCount: 0}, want: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := inferStoredSessionIssueCount(tt.record); got != tt.want {
+				t.Fatalf("inferStoredSessionIssueCount() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEnforceSessionModeIssuesDropsCounterpartFindings(t *testing.T) {
+	issues := []SessionPragmaticIssue{
+		{SourceRole: ErrorSourceUser, LLMSuggestion: "user revision", LLMIntendedMeaning: "remove for user"},
+		{SourceRole: ErrorSourceLLM, LLMSuggestion: "remove for listener", LLMIntendedMeaning: "possible intent"},
+	}
+	userIssues := enforceSessionModeIssues(ModeUserL2, issues)
+	if len(userIssues) != 1 || userIssues[0].SourceRole != ErrorSourceUser || userIssues[0].LLMIntendedMeaning != "" {
+		t.Fatalf("unexpected user_l2 issues: %#v", userIssues)
+	}
+	llmIssues := enforceSessionModeIssues(ModeLLML2, issues)
+	if len(llmIssues) != 1 || llmIssues[0].SourceRole != ErrorSourceLLM || llmIssues[0].LLMSuggestion != "" {
+		t.Fatalf("unexpected llm_l2 issues: %#v", llmIssues)
 	}
 }
 

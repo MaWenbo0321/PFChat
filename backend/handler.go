@@ -57,10 +57,11 @@ type GetGrammarErrorsResponse struct {
 
 // GrammarErrorStatistics 语法错误统计
 type GrammarErrorStatistics struct {
-	Total      int64          `json:"total"`
-	ByType     map[string]int `json:"by_type"`
-	TodayCount int64          `json:"today_count"`
-	WeekCount  int64          `json:"week_count"`
+	Total       int64          `json:"total"`
+	RecordTotal int64          `json:"record_total"`
+	ByType      map[string]int `json:"by_type"`
+	TodayCount  int64          `json:"today_count"`
+	WeekCount   int64          `json:"week_count"`
 }
 
 // 获取当前用户的语法错误记录（支持按类型筛选）
@@ -74,7 +75,7 @@ func getGrammarErrors(c *gin.Context) {
 	}
 
 	// 构建查询
-	query := db.Where("user_id = ?", userID)
+	query := db.Where("user_id = ? AND error_type <> ?", userID, ErrorTypeNoIssue)
 
 	// 按错误类型筛选
 	if req.ErrorType != "" && req.ErrorType != "all" {
@@ -118,7 +119,7 @@ func isValidSessionModeFilter(mode string) bool {
 
 // 获取语法错误统计信息
 func grammarErrorStatisticsQuery(userID uint, sessionMode string) *gorm.DB {
-	query := db.Model(&GrammarError{}).Where("user_id = ?", userID)
+	query := db.Model(&GrammarError{}).Where("user_id = ? AND error_type <> ?", userID, ErrorTypeNoIssue)
 	if isValidSessionModeFilter(sessionMode) {
 		query = query.Where("session_mode = ?", sessionMode)
 	}
@@ -128,8 +129,12 @@ func grammarErrorStatisticsQuery(userID uint, sessionMode string) *gorm.DB {
 func getGrammarErrorStatistics(userID uint, sessionMode string) (GrammarErrorStatistics, error) {
 	var statistics GrammarErrorStatistics
 
-	// 总数
-	if err := grammarErrorStatisticsQuery(userID, sessionMode).Count(&statistics.Total).Error; err != nil {
+	// 会话级记录可能包含多个问题；总数按实际问题数统计，记录数单独返回给删除确认使用。
+	issueCountSQL := "COALESCE(SUM(CASE WHEN issue_count > 0 THEN issue_count ELSE 1 END), 0)"
+	if err := grammarErrorStatisticsQuery(userID, sessionMode).Select(issueCountSQL).Scan(&statistics.Total).Error; err != nil {
+		return statistics, err
+	}
+	if err := grammarErrorStatisticsQuery(userID, sessionMode).Count(&statistics.RecordTotal).Error; err != nil {
 		return statistics, err
 	}
 
@@ -153,14 +158,14 @@ func getGrammarErrorStatistics(userID uint, sessionMode string) (GrammarErrorSta
 	// 今日错误数
 	if err := grammarErrorStatisticsQuery(userID, sessionMode).
 		Where("DATE(created_at) = CURDATE()").
-		Count(&statistics.TodayCount).Error; err != nil {
+		Select(issueCountSQL).Scan(&statistics.TodayCount).Error; err != nil {
 		return statistics, err
 	}
 
 	// 本周错误数
 	if err := grammarErrorStatisticsQuery(userID, sessionMode).
 		Where("YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)").
-		Count(&statistics.WeekCount).Error; err != nil {
+		Select(issueCountSQL).Scan(&statistics.WeekCount).Error; err != nil {
 		return statistics, err
 	}
 
@@ -443,7 +448,10 @@ func getUserStats(c *gin.Context) {
 		db.Model(&User{}).Where("role = ?", RoleAdmin).Count(&stats.AdminUsers),
 		db.Model(&User{}).Where("role = ?", RoleUser).Count(&stats.RegularUsers),
 		db.Model(&Message{}).Count(&stats.TotalMessages),
-		db.Model(&GrammarError{}).Count(&stats.TotalGrammarErrors),
+		db.Model(&GrammarError{}).
+			Where("error_type <> ?", ErrorTypeNoIssue).
+			Select("COALESCE(SUM(CASE WHEN issue_count > 0 THEN issue_count ELSE 1 END), 0)").
+			Scan(&stats.TotalGrammarErrors),
 	}
 	for _, query := range queries {
 		if query.Error != nil {
