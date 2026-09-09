@@ -351,6 +351,22 @@ func TestLLML2NormalTurnIgnoresPragmaticFailureExamples(t *testing.T) {
 	}
 }
 
+func TestLLML2EventValidationPromptRequiresObservableImprovableIssue(t *testing.T) {
+	prompt := buildLLML2EventValidationPrompt("BASE EVALUATOR")
+	for _, want := range []string{
+		"BASE EVALUATOR",
+		"deliberately scheduled PRAGMATIC_EVENT turn",
+		"not proof by itself",
+		"commitment clarity, mitigation, formality, completeness",
+		`set has_error=true and overall_evaluation="improvable"`,
+		"Return has_error=false only when none",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("event validation prompt is missing %q\n%s", want, prompt)
+		}
+	}
+}
+
 func TestSanitizeIntendedMeaningPrefixes(t *testing.T) {
 	tests := map[string]string{
 		"说话者可能想表达：希望对方再解释一次。":                                    "希望对方再解释一次。",
@@ -515,6 +531,52 @@ func TestCombinedPromptContainsChineseCulturalAttributionGate(t *testing.T) {
 	}
 }
 
+func TestPerTurnFeedbackLanguageFollowsHumanLocaleContract(t *testing.T) {
+	session := ConversationSession{Mode: ModeLLML2, TargetLanguage: "EN", RelationshipType: "colleagues", Topic: "business"}
+	bot := User{Country: "JP", Role: RoleBot}
+
+	chinesePrompt := buildCombinedPrompt(
+		nil,
+		Message{Role: ErrorSourceLLM, Content: "I cannot promise five o'clock. Please wait."},
+		bot,
+		User{Country: " cn "},
+		session,
+	)
+	if !strings.Contains(chinesePrompt, "intended_meaning and explanation must be in Chinese") {
+		t.Fatalf("Chinese human user did not receive Chinese feedback instructions:\n%s", chinesePrompt)
+	}
+
+	for _, country := range []string{"JP", "KR", "FR", "DE", "US", "OTHER"} {
+		prompt := buildCombinedPrompt(
+			nil,
+			Message{Role: ErrorSourceLLM, Content: "I cannot promise five o'clock. Please wait."},
+			bot,
+			User{Country: country},
+			session,
+		)
+		if !strings.Contains(prompt, "intended_meaning and explanation must be in English") {
+			t.Fatalf("non-Chinese user %s did not receive English feedback instructions:\n%s", country, prompt)
+		}
+		if strings.Contains(prompt, "must be in Japanese") || strings.Contains(prompt, "must be in Korean") ||
+			strings.Contains(prompt, "must be in French") || strings.Contains(prompt, "must be in German") {
+			t.Fatalf("non-Chinese user %s received country-language feedback instructions:\n%s", country, prompt)
+		}
+	}
+}
+
+func TestChineseTargetStillUsesEnglishFeedbackForNonChineseUser(t *testing.T) {
+	prompt := buildCombinedPrompt(
+		nil,
+		Message{Role: ErrorSourceLLM, Content: "请等我的消息。"},
+		User{Country: "US", Role: RoleBot},
+		User{Country: "JP"},
+		ConversationSession{Mode: ModeLLML2, TargetLanguage: "ZH", RelationshipType: "同事", Topic: "商务沟通"},
+	)
+	if !strings.Contains(prompt, "intended_meaning 和 explanation 必须使用英语") {
+		t.Fatalf("Chinese target-language content overrode the non-Chinese user's English feedback language:\n%s", prompt)
+	}
+}
+
 func TestSessionFeedbackPromptExplainsLikelyL2IntentionWithoutNationalityInference(t *testing.T) {
 	session := ConversationSession{
 		Mode: ModeLLML2, TargetLanguage: "EN", RelationshipType: "师生", Topic: "学术讨论",
@@ -578,6 +640,27 @@ func TestUserL2SessionPromptOmitsIntendedMeaningAndKeepsSuggestion(t *testing.T)
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("user L2 session prompt is missing %q\n%s", want, prompt)
 		}
+	}
+}
+
+func TestSessionFeedbackLanguageContractUsesEnglishForNonChineseUsers(t *testing.T) {
+	session := ConversationSession{Mode: ModeLLML2, TargetLanguage: "EN", RelationshipType: "colleagues", Topic: "business"}
+	for _, country := range []string{"JP", "KR", "FR", "DE", "US", "OTHER"} {
+		prompt := buildSessionFeedbackPrompt(session, nil, User{Country: country})
+		for _, want := range []string{
+			"Feedback language contract",
+			"summary, conversation_summary, llm_intended_meaning, and llm_explanation must be in English",
+			"original_text must preserve the source verbatim",
+		} {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("non-Chinese user %s is missing session-feedback language rule %q:\n%s", country, want, prompt)
+			}
+		}
+	}
+
+	chinesePrompt := buildSessionFeedbackPrompt(session, nil, User{Country: "CN"})
+	if !strings.Contains(chinesePrompt, "summary、conversation_summary、llm_intended_meaning 和 llm_explanation 必须使用中文") {
+		t.Fatalf("Chinese user is missing Chinese session-feedback language rule:\n%s", chinesePrompt)
 	}
 }
 

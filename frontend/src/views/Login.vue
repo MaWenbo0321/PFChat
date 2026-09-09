@@ -120,7 +120,7 @@ import { Warning, User, Lock } from '@element-plus/icons-vue'
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
 import { useSessionStore } from '@/stores/session'
-import { getLocaleByCountry } from '@/utils/locale'
+import { getLocaleByCountry, switchLocale } from '@/utils/locale'
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue'
 
 const router = useRouter()
@@ -165,9 +165,7 @@ const registerRules = {
 // 监听国家选择,自动切换语言
 watch(() => registerForm.country, (newCountry) => {
   if (newCountry) {
-    const newLocale = getLocaleByCountry(newCountry)
-    locale.value = newLocale
-    localStorage.setItem('locale', newLocale)
+    switchLocale(getLocaleByCountry(newCountry), locale)
   }
 })
 
@@ -180,6 +178,11 @@ const handleLogin = async () => {
     sessionStore.clearSession()
     userStore.setToken(response.token)
     userStore.setUserInfo(response.user)
+
+    // Existing accounts must not inherit the locale left by the previous
+    // browser user. PFChat currently provides Chinese and English UI/feedback:
+    // Chinese-locale countries use zh-CN, all other countries use en-US.
+    switchLocale(getLocaleByCountry(response.user?.country), locale)
 
     ElMessage.success(t('login.loginSuccess'))
     await router.push('/setup')

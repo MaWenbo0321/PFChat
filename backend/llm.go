@@ -307,11 +307,10 @@ func buildCombinedPrompt(history []Message, current Message, sender User, receiv
 	}
 	llmCountry := getLLMPersonaNativeCountry(session, humanUser)
 	llmNativeLang := getLLMPersonaNativeLanguage(session, humanUser)
-	explanationCountry := sender.Country
-	if current.Role == ErrorSourceLLM {
-		explanationCountry = receiver.Country
-	}
-	explanationLang := getCountryLanguageName(explanationCountry, isChineseMsg)
+	// Feedback follows the human-facing UI language contract: Chinese for users
+	// served by the Chinese locale, English for everyone else. The LLM role's
+	// country and the language of the analyzed utterance must not change it.
+	explanationLang := getFeedbackLanguageName(humanUser, isChineseMsg)
 
 	if isChineseMsg {
 		sb.WriteString("你是 PFChat 项目中的跨文化语用学评估器。\n")
@@ -591,39 +590,17 @@ func getTargetLanguagePromptName(lang string, isChinese bool) string {
 	}
 }
 
-func getCountryLanguageName(country string, isChinese bool) string {
-	switch country {
-	case "CN", "TW", "HK", "SG":
-		if isChinese {
+func getFeedbackLanguageName(user User, promptIsChinese bool) string {
+	if isChineseUser(user) {
+		if promptIsChinese {
 			return "中文"
 		}
 		return "Chinese"
-	case "JP":
-		if isChinese {
-			return "日语"
-		}
-		return "Japanese"
-	case "KR":
-		if isChinese {
-			return "韩语"
-		}
-		return "Korean"
-	case "FR":
-		if isChinese {
-			return "法语"
-		}
-		return "French"
-	case "DE":
-		if isChinese {
-			return "德语"
-		}
-		return "German"
-	default:
-		if isChinese {
-			return "英语"
-		}
-		return "English"
 	}
+	if promptIsChinese {
+		return "英语"
+	}
+	return "English"
 }
 
 func getDashScopeAPIKey() string {

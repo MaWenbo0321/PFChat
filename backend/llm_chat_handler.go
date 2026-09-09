@@ -369,8 +369,15 @@ func generateLLMChatReply(session ConversationSession, history []Message, userIn
 		log.Printf("二语语用事件重试预检失败，使用重试回复: %v", retryCheckErr)
 		return llmChatGeneration{Content: retryReply}
 	}
-	if isAcceptableLLML2Event(retryCheck) || !isProblematicPragmaticCheck(retryCheck) {
+	if isAcceptableLLML2Event(retryCheck) {
 		return llmChatGeneration{Content: retryReply, PrecomputedPragmaticCheck: retryCheck}
+	}
+	if retryCheck != nil && !retryCheck.HasError {
+		// Do not cache a clean result as if the scheduled event succeeded. Leaving
+		// the precomputed check nil makes the normal post-save evaluator perform
+		// one final independent check of the actual reply shown to the user.
+		log.Printf("二语语用事件重试仍未检测到可观察失误，交由逐轮检测再次核验")
+		return llmChatGeneration{Content: retryReply}
 	}
 
 	// 两个候选都未达到目标时优先保留非严重版本，避免为了训练事件制造冒犯。
@@ -387,7 +394,10 @@ func evaluateLLML2Candidate(session ConversationSession, history []Message, user
 	currentUserMessage := Message{Role: ErrorSourceUser, Content: userInput}
 	checkHistory := append([]Message{currentUserMessage}, history...)
 	currentReply := Message{Role: ErrorSourceLLM, Content: reply}
-	result, err := callDashScopeAPI(buildCombinedPrompt(checkHistory, currentReply, botUser, user, session))
+	validationPrompt := buildLLML2EventValidationPrompt(
+		buildCombinedPrompt(checkHistory, currentReply, botUser, user, session),
+	)
+	result, err := callDashScopeAPI(validationPrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +406,7 @@ func evaluateLLML2Candidate(session ConversationSession, history []Message, user
 }
 
 func isAcceptableLLML2Event(result *GrammarCheckResponse) bool {
-	return result != nil && result.HasError && result.OverallEvaluation == "improvable"
+	return result != nil && result.HasError && !isProblematicPragmaticCheck(result)
 }
 
 func isProblematicPragmaticCheck(result *GrammarCheckResponse) bool {
@@ -415,7 +425,24 @@ Revision required:
 - It was rejected because %s.
 - Write a new reply that preserves the established facts and communicative purpose.
 - Keep the persistent intermediate-learner voice, and include exactly one mild, recoverable pragmatic miscalibration that a listener can notice.
+- The miscalibration must affect commitment clarity, mitigation, formality, completeness, or interpersonal meaning. An ordinary grammar or collocation error does not satisfy this requirement.
+- If the current request does not naturally support another pattern, use a mildly under-mitigated or slightly too-vague formulation that remains cooperative but clearly warrants an "improvable" pragmatic judgment.
 - Do not explain the revision or reveal this evaluation. Output only the new in-character dialogue.`, basePrompt, rejectedReply, reason)
+}
+
+// buildLLML2EventValidationPrompt aligns the evaluator with the scheduled
+// training-event contract. It still requires observable evidence, but prevents
+// a mild, recoverable event from being dismissed merely because it is easy to
+// repair or the reply's main proposition remains understandable.
+func buildLLML2EventValidationPrompt(basePrompt string) string {
+	return basePrompt + `
+
+Scheduled L2 training-event validation (internal evaluator context):
+- This reply was generated for a deliberately scheduled PRAGMATIC_EVENT turn. This fact is evaluation context, not proof by itself; never invent an issue that is absent from the wording.
+- Inspect the exact reply for one observable mild mismatch in commitment clarity, mitigation, formality, completeness of a requested answer, or interpersonal meaning.
+- When such a mismatch is present and context-supported, set has_error=true and overall_evaluation="improvable" even if the literal message is understandable, cooperative overall, or easy to repair.
+- Do not downgrade the mismatch to a mere grammar/style issue when it can reasonably leave the listener unsure about a promise, refusal, request, stance, or next step.
+- Return has_error=false only when none of those pragmatic mismatches is actually observable. Severe, hostile, discriminatory, or invented-content problems remain "problematic" and must not be treated as the desired event.`
 }
 
 // buildUserL2Prompt 模式1：用户使用第二语言，LLM作为母语者正常交流
@@ -1294,6 +1321,11 @@ func buildSessionFeedbackPrompt(session ConversationSession, messages []Message,
 			sb.WriteString("The Human Speaker is the L2 learner. The user already knows their own intent, so llm_intended_meaning must be an empty string for every issue; do not guess it for them. llm_suggestion should provide one directly usable revision while preserving the source's truth conditions, stance, causes, responsibility, timing, and commitments.\n\n")
 		}
 	}
+	if isZh {
+		sb.WriteString("反馈语言要求：summary、conversation_summary、llm_intended_meaning 和 llm_explanation 必须使用中文；original_text 必须保留原文。若存在 llm_suggestion，它必须使用被分析学习者消息的练习语言，而不是为了配合报告语言而翻译成中文。\n\n")
+	} else {
+		sb.WriteString("Feedback language contract: summary, conversation_summary, llm_intended_meaning, and llm_explanation must be in English; original_text must preserve the source verbatim. When llm_suggestion is present, keep it in the analyzed learner message's practice language rather than translating it merely to match the report language.\n\n")
+	}
 
 	if isZh {
 		sb.WriteString("完整对话记录:\n")
@@ -1355,7 +1387,7 @@ func getErrorSourceLabel(sourceRole string, isChinese bool) string {
 }
 
 func isChineseUser(user User) bool {
-	switch user.Country {
+	switch strings.ToUpper(strings.TrimSpace(user.Country)) {
 	case "CN", "TW", "HK", "SG":
 		return true
 	default:
