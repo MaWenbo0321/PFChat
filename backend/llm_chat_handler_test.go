@@ -187,9 +187,9 @@ func TestParseTokenClaimsRestrictsSigningMethod(t *testing.T) {
 }
 
 func TestRuntimeSecretsRequireEnvironmentVariables(t *testing.T) {
-	t.Setenv("DASHSCOPE_API_KEY", "")
-	if got := getDashScopeAPIKey(); got != "" {
-		t.Fatal("DashScope API key must not fall back to a source-code secret")
+	t.Setenv("OPENROUTER_API_KEY", "")
+	if got := getOpenRouterAPIKey(); got != "" {
+		t.Fatal("OpenRouter API key must not fall back to a source-code secret")
 	}
 
 	t.Setenv("JWT_SECRET", "short")
@@ -422,12 +422,11 @@ func TestDashScopeSearchParametersMarshal(t *testing.T) {
 	}
 }
 
-func TestParseDashScopeSSEMergesIncrementalTextAndSources(t *testing.T) {
+func TestParseOpenRouterSSEMergesIncrementalText(t *testing.T) {
 	sse := strings.Join([]string{
-		`event: result`,
-		`data: {"request_id":"req-1","output":{"search_info":{"search_results":[{"index":1,"title":"Source","url":"https://example.com/article","site_name":"Example"}]},"choices":[{"message":{"role":"assistant","content":[{"text":"{\"examples\":["}]},"finish_reason":"null"}]}}`,
+		`data: {"id":"chatcmpl-1","choices":[{"delta":{"role":"assistant","content":"{\"examples\":["},"finish_reason":null}]}`,
 		``,
-		`data: {"request_id":"req-1","output":{"choices":[{"message":{"role":"assistant","content":[{"text":"]}"}]},"finish_reason":"stop"}]},"usage":{"input_tokens":10,"output_tokens":3,"total_tokens":13}}`,
+		`data: {"id":"chatcmpl-1","choices":[{"delta":{"content":"]}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":3,"total_tokens":13}}`,
 		``,
 		`data: [DONE]`,
 	}, "\n")
@@ -439,11 +438,40 @@ func TestParseDashScopeSSEMergesIncrementalTextAndSources(t *testing.T) {
 	if got := getDashScopeResponseText(resp); got != `{"examples":[]}` {
 		t.Fatalf("unexpected merged content: %q", got)
 	}
-	if len(resp.Output.SearchInfo.SearchResults) != 1 || resp.Output.SearchInfo.SearchResults[0].URL != "https://example.com/article" {
-		t.Fatalf("search sources were not preserved: %#v", resp.Output.SearchInfo.SearchResults)
-	}
 	if resp.Usage.TotalTokens != 13 || resp.Output.FinishReason != "stop" {
 		t.Fatalf("final stream metadata was not preserved: %#v", resp)
+	}
+}
+
+func TestDashScopeRequestMarshalsForOpenRouter(t *testing.T) {
+	request := DashScopeRequest{
+		Model: "gpt-6Luna",
+		Input: DashScopeInput{Messages: []DashScopeMessage{
+			newDashScopeTextMessage("user", "hello"),
+		}},
+		Parameters: DashScopeParameters{
+			Temperature:         0.2,
+			MaxCompletionTokens: 12,
+			ResponseFormat:      &DashScopeResponseFormat{Type: "json_object"},
+			IncrementalOutput:   boolPtr(true),
+		},
+	}
+
+	data, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serialized := string(data)
+	for _, want := range []string{
+		`"model":"gpt-6Luna"`,
+		`"messages":[{"role":"user","content":"hello"}]`,
+		`"max_completion_tokens":12`,
+		`"response_format":{"type":"json_object"}`,
+		`"stream":true`,
+	} {
+		if !strings.Contains(serialized, want) {
+			t.Fatalf("OpenRouter request is missing %s: %s", want, serialized)
+		}
 	}
 }
 
