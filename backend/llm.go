@@ -14,10 +14,11 @@ import (
 	"time"
 )
 
-// OpenRouter API 配置
+// DashScope API 配置
 const (
-	openRouterDefaultAPIURL = "https://openrouter.ai/api/v1/chat/completions"
-	defaultModel            = "openai/gpt-6-luna"
+	dashScopeDefaultAPIURL  = "https://llm-26cli7e69esmbtok.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+	dashScopeGenerationPath = "/services/aigc/multimodal-generation/generation"
+	defaultModel            = "qwen3.8-flash"
 )
 
 // DashScope 请求结构（原生 HTTP 调用格式）
@@ -61,57 +62,6 @@ type DashScopeSearchOptions struct {
 	EnableCitation bool   `json:"enable_citation,omitempty"`
 	CitationFormat string `json:"citation_format,omitempty"`
 	SearchStrategy string `json:"search_strategy,omitempty"`
-}
-
-// MarshalJSON adapts the legacy internal request structure to OpenRouter's
-// OpenAI-compatible chat-completions format, so callers can stay unchanged.
-func (r DashScopeRequest) MarshalJSON() ([]byte, error) {
-	type openRouterMessage struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	}
-	type openRouterRequest struct {
-		Model               string                   `json:"model"`
-		Messages            []openRouterMessage      `json:"messages"`
-		Temperature         float64                  `json:"temperature,omitempty"`
-		MaxCompletionTokens int                      `json:"max_completion_tokens,omitempty"`
-		ResponseFormat      *DashScopeResponseFormat `json:"response_format,omitempty"`
-		Stream              bool                     `json:"stream,omitempty"`
-	}
-
-	messages := make([]openRouterMessage, 0, len(r.Input.Messages))
-	for _, message := range r.Input.Messages {
-		content, err := dashScopeMessageText(message.Content)
-		if err != nil {
-			return nil, err
-		}
-		messages = append(messages, openRouterMessage{Role: message.Role, Content: content})
-	}
-
-	stream := r.Parameters.IncrementalOutput != nil && *r.Parameters.IncrementalOutput
-	return json.Marshal(openRouterRequest{
-		Model:               r.Model,
-		Messages:            messages,
-		Temperature:         r.Parameters.Temperature,
-		MaxCompletionTokens: r.Parameters.MaxCompletionTokens,
-		ResponseFormat:      r.Parameters.ResponseFormat,
-		Stream:              stream,
-	})
-}
-
-func dashScopeMessageText(content any) (string, error) {
-	switch value := content.(type) {
-	case string:
-		return value, nil
-	case []DashScopeContentPart:
-		var text strings.Builder
-		for _, part := range value {
-			text.WriteString(part.Text)
-		}
-		return text.String(), nil
-	default:
-		return "", fmt.Errorf("unsupported message content type %T", content)
-	}
 }
 
 type DashScopeStatusCode int
@@ -178,65 +128,6 @@ type DashScopeResponseMessage struct {
 	Role             string          `json:"role"`
 	Content          json.RawMessage `json:"content"`
 	ReasoningContent string          `json:"reasoning_content,omitempty"`
-}
-
-// UnmarshalJSON maps OpenRouter's OpenAI-compatible response into the
-// existing internal response type used by all LLM features.
-func (r *DashScopeResponse) UnmarshalJSON(data []byte) error {
-	type openRouterChoice struct {
-		FinishReason string `json:"finish_reason"`
-		Message      struct {
-			Role    string          `json:"role"`
-			Content json.RawMessage `json:"content"`
-		} `json:"message"`
-		Delta struct {
-			Role    string          `json:"role"`
-			Content json.RawMessage `json:"content"`
-		} `json:"delta"`
-	}
-	var response struct {
-		ID      string             `json:"id"`
-		Choices []openRouterChoice `json:"choices"`
-		Usage   struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-			TotalTokens      int `json:"total_tokens"`
-		} `json:"usage"`
-	}
-	if err := json.Unmarshal(data, &response); err != nil {
-		return err
-	}
-
-	r.RequestID = response.ID
-	r.Usage.InputTokens = response.Usage.PromptTokens
-	r.Usage.OutputTokens = response.Usage.CompletionTokens
-	r.Usage.TotalTokens = response.Usage.TotalTokens
-	r.Output.Choices = make([]struct {
-		FinishReason string                   `json:"finish_reason"`
-		Message      DashScopeResponseMessage `json:"message"`
-	}, 0, len(response.Choices))
-	for _, choice := range response.Choices {
-		content := choice.Message.Content
-		role := choice.Message.Role
-		if len(content) == 0 || bytes.Equal(bytes.TrimSpace(content), []byte("null")) {
-			content = choice.Delta.Content
-			role = choice.Delta.Role
-		}
-		r.Output.Choices = append(r.Output.Choices, struct {
-			FinishReason string                   `json:"finish_reason"`
-			Message      DashScopeResponseMessage `json:"message"`
-		}{
-			FinishReason: choice.FinishReason,
-			Message: DashScopeResponseMessage{
-				Role:    role,
-				Content: content,
-			},
-		})
-		if choice.FinishReason != "" {
-			r.Output.FinishReason = choice.FinishReason
-		}
-	}
-	return nil
 }
 
 // GrammarCheckResponse 语用失误检查响应结构 (LLM 返回的 JSON)
@@ -712,25 +603,37 @@ func getFeedbackLanguageName(user User, promptIsChinese bool) string {
 	return "English"
 }
 
-func getOpenRouterAPIKey() string {
-	if apiKey := strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")); apiKey != "" {
+func getDashScopeAPIKey() string {
+	if apiKey := strings.TrimSpace(os.Getenv("DASHSCOPE_API_KEY")); apiKey != "" {
 		return apiKey
 	}
 	return ""
 }
 
-func getOpenRouterModel() string {
-	if model := strings.TrimSpace(os.Getenv("OPENROUTER_MODEL")); model != "" {
+func getDashScopeModel() string {
+	if model := strings.TrimSpace(os.Getenv("DASHSCOPE_MODEL")); model != "" {
 		return model
 	}
 	return defaultModel
 }
 
-func getOpenRouterChatCompletionsURL() string {
-	if apiURL := strings.TrimSpace(os.Getenv("OPENROUTER_API_URL")); apiURL != "" {
+func getDashScopeGenerationURL() string {
+	if apiURL := strings.TrimSpace(os.Getenv("DASHSCOPE_API_URL")); apiURL != "" {
 		return strings.TrimRight(apiURL, "/")
 	}
-	return openRouterDefaultAPIURL
+
+	baseURL := strings.TrimSpace(os.Getenv("DASHSCOPE_BASE_URL"))
+	if baseURL == "" {
+		return dashScopeDefaultAPIURL
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	if strings.HasSuffix(baseURL, "/generation") {
+		return baseURL
+	}
+	if strings.HasSuffix(baseURL, "/api/v1") {
+		return baseURL + dashScopeGenerationPath
+	}
+	return baseURL + "/api/v1" + dashScopeGenerationPath
 }
 
 func boolPtr(v bool) *bool {
@@ -762,7 +665,7 @@ func makeDashScopeHTTPRequest(apiKey string, reqBody DashScopeRequest, streaming
 		return nil, fmt.Errorf("JSON 序列化失败: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", getOpenRouterChatCompletionsURL(), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("POST", getDashScopeGenerationURL(), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %v", err)
 	}
@@ -770,7 +673,7 @@ func makeDashScopeHTTPRequest(apiKey string, reqBody DashScopeRequest, streaming
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	if streaming {
-		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("X-DashScope-SSE", "enable")
 	}
 
 	client := &http.Client{Timeout: timeout}
@@ -780,7 +683,7 @@ func makeDashScopeHTTPRequest(apiKey string, reqBody DashScopeRequest, streaming
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+	if resp.StatusCode != http.StatusOK {
 		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		if readErr != nil {
 			return nil, fmt.Errorf("API 返回错误 %d，且读取错误内容失败: %v", resp.StatusCode, readErr)
@@ -914,7 +817,7 @@ func extractDashScopeContentText(raw json.RawMessage) string {
 // callDashScopeAPI 调用 DashScope API 进行语用检查
 func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
 	reqBody := DashScopeRequest{
-		Model: getOpenRouterModel(),
+		Model: getDashScopeModel(),
 		Input: DashScopeInput{
 			Messages: []DashScopeMessage{
 				newDashScopeTextMessage("user", prompt),
@@ -929,7 +832,7 @@ func callDashScopeAPI(prompt string) (*GrammarCheckResponse, error) {
 		},
 	}
 
-	dashResp, err := makeDashScopeRequest(getOpenRouterAPIKey(), reqBody)
+	dashResp, err := makeDashScopeRequest(getDashScopeAPIKey(), reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -961,7 +864,7 @@ func callDashScopeJSON(prompt string, target any, maxCompletionTokens int) error
 
 func callDashScopeJSONWithTemperature(prompt string, target any, maxCompletionTokens int, temperature float64) error {
 	reqBody := DashScopeRequest{
-		Model: getOpenRouterModel(),
+		Model: getDashScopeModel(),
 		Input: DashScopeInput{
 			Messages: []DashScopeMessage{
 				newDashScopeTextMessage("user", prompt),
@@ -976,7 +879,7 @@ func callDashScopeJSONWithTemperature(prompt string, target any, maxCompletionTo
 		},
 	}
 
-	dashResp, err := makeDashScopeRequest(getOpenRouterAPIKey(), reqBody)
+	dashResp, err := makeDashScopeRequest(getDashScopeAPIKey(), reqBody)
 	if err != nil {
 		return err
 	}

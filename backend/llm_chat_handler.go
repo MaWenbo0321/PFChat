@@ -718,7 +718,7 @@ func pragmaticResearchCacheKey(session ConversationSession, user User) string {
 		strings.ToLower(strings.TrimSpace(session.LLMRoleID)),
 		strings.ToUpper(strings.TrimSpace(getLLMPersonaNativeCountry(session, user))),
 		strings.ToUpper(strings.TrimSpace(user.Country)),
-		getOpenRouterModel(),
+		getDashScopeModel(),
 		getDashScopeSearchStrategy(),
 	}
 	return strings.Join(parts, "\x1f")
@@ -768,7 +768,7 @@ func clonePragmaticResearch(research PragmaticExampleResearch) PragmaticExampleR
 func searchPragmaticExamples(session ConversationSession, user User) (PragmaticExampleResearch, error) {
 	prompt := buildPragmaticResearchPrompt(session, user)
 	reqBody := DashScopeRequest{
-		Model: getOpenRouterModel(),
+		Model: getDashScopeModel(),
 		Input: DashScopeInput{Messages: []DashScopeMessage{
 			newDashScopeTextMessage("user", prompt),
 		}},
@@ -788,7 +788,7 @@ func searchPragmaticExamples(session ConversationSession, user User) (PragmaticE
 		},
 	}
 
-	dashResp, err := makeDashScopeStreamingRequest(getOpenRouterAPIKey(), reqBody)
+	dashResp, err := makeDashScopeStreamingRequest(getDashScopeAPIKey(), reqBody)
 	if err != nil {
 		return PragmaticExampleResearch{}, err
 	}
@@ -1461,7 +1461,7 @@ func stringInSlice(value string, values []string) bool {
 // callLLMChatAPI 调用 DashScope API 生成 LLM 对话回复
 func callLLMChatAPI(prompt string) (string, error) {
 	reqBody := DashScopeRequest{
-		Model: getOpenRouterModel(),
+		Model: getDashScopeModel(),
 		Input: DashScopeInput{
 			Messages: []DashScopeMessage{
 				newDashScopeTextMessage("user", prompt),
@@ -1475,7 +1475,7 @@ func callLLMChatAPI(prompt string) (string, error) {
 		},
 	}
 
-	dashResp, err := makeDashScopeRequest(getOpenRouterAPIKey(), reqBody)
+	dashResp, err := makeDashScopeRequest(getDashScopeAPIKey(), reqBody)
 	if err != nil {
 		return "", err
 	}

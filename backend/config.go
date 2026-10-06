@@ -27,7 +27,7 @@ func requireEnv(name string) (string, error) {
 
 func validateRuntimeConfig() error {
 	for _, name := range []string{
-		"OPENROUTER_API_KEY",
+		"DASHSCOPE_API_KEY",
 		"JWT_SECRET",
 		"MYSQL_DATABASE",
 		"MYSQL_USER",
