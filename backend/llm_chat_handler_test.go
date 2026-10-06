@@ -445,7 +445,7 @@ func TestParseOpenRouterSSEMergesIncrementalText(t *testing.T) {
 
 func TestDashScopeRequestMarshalsForOpenRouter(t *testing.T) {
 	request := DashScopeRequest{
-		Model: "gpt-6Luna",
+		Model: "openai/gpt-6-luna",
 		Input: DashScopeInput{Messages: []DashScopeMessage{
 			newDashScopeTextMessage("user", "hello"),
 		}},
@@ -463,7 +463,7 @@ func TestDashScopeRequestMarshalsForOpenRouter(t *testing.T) {
 	}
 	serialized := string(data)
 	for _, want := range []string{
-		`"model":"gpt-6Luna"`,
+		`"model":"openai/gpt-6-luna"`,
 		`"messages":[{"role":"user","content":"hello"}]`,
 		`"max_completion_tokens":12`,
 		`"response_format":{"type":"json_object"}`,

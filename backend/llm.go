@@ -17,7 +17,7 @@ import (
 // OpenRouter API 配置
 const (
 	openRouterDefaultAPIURL = "https://openrouter.ai/api/v1/chat/completions"
-	defaultModel            = "gpt-6Luna"
+	defaultModel            = "openai/gpt-6-luna"
 )
 
 // DashScope 请求结构（原生 HTTP 调用格式）
